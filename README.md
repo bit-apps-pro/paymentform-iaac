@@ -1,474 +1,573 @@
 # Payment Form Infrastructure as Code
 
-This repository contains the Infrastructure as Code (IaC) for the Payment Form application, supporting multi-region deployment with separate hosting for backend, client, and renderer components.
+Production-ready infrastructure for the Payment Form application using OpenTofu (Terraform), supporting multi-region deployment across AWS.
 
-## Quick Links
+## 🚀 Quick Start
 
-- 📋 [Architecture Documentation](./docs/architecture.md)
-- 🚀 [Deployment Guide](./docs/deployment-guide.md)
-- 🔐 [Secrets Management](./docs/secrets-management.md)
-- 📊 [Monitoring & Logging](./docs/monitoring-logging.md)
-- 🔄 [Disaster Recovery](./docs/disaster-recovery.md)
+### Prerequisites
+- OpenTofu >= 1.5 ([Install](https://opentofu.org/docs/intro/install/))
+- AWS CLI configured with credentials
+- Neon API key ([Get one here](https://neon.tech))
+- Turso API token ([Get one here](https://turso.tech))
+- `make` (optional, for convenience commands)
 
-## Architecture Overview
+### Setup Databases
 
-The infrastructure is designed with the following regional distribution:
+```bash
+# 1. Create Neon account at https://neon.tech (main application DB)
+# 2. Create Turso account at https://turso.tech (tenant databases)
+# 3. Store credentials in AWS Secrets Manager
+aws secretsmanager create-secret \
+  --name neon-api-key \
+  --secret-string "your-neon-api-key"
 
-- **US East (Virginia)**: Backend services and primary database
-- **EU West (Ireland)**: Client dashboard  
-- **Asia Pacific (Singapore)**: Multi-tenant renderer
-- **Multi-region databases**: Aurora primary with read replicas, Turso multi-region
-- **Multi-region storage**: S3 with cross-region replication
+aws secretsmanager create-secret \
+  --name turso-api-token \
+  --secret-string "your-turso-token"
 
-## Components
+# 4. Export for Terraform
+export TF_VAR_neon_api_key=$(aws secretsmanager get-secret-value \
+  --secret-id neon-api-key \
+  --query SecretString \
+  --output text)
 
-- **OpenTofu** for infrastructure provisioning (>= v1.6)
-- **Ansible** for configuration management (>= v2.10)
-- **LocalStack** for local testing and development
-- **CloudWatch** for monitoring and logging
-- Separate state management per region/account
-- Local deployment capabilities with Docker Compose
+export TF_VAR_turso_api_token=$(aws secretsmanager get-secret-value \
+  --secret-id turso-api-token \
+  --query SecretString \
+  --output text)
+```
 
-## Directory Structure
+### Initialize Infrastructure
+
+```bash
+# From iaac/ directory
+make init ENV=dev
+```
+
+Or use direct commands:
+
+```bash
+tofu init -backend-config=infrastructure/environments/dev/backend.hcl
+```
+
+## 📋 Common Operations
+
+### Plan Changes
+```bash
+make plan ENV=dev                                    # Makefile
+./tofu-wrapper.sh plan dev                          # Wrapper script
+tofu plan -var-file=infrastructure/environments/dev/terraform.tfvars  # Direct
+```
+
+### Apply Changes
+```bash
+make apply ENV=dev
+./tofu-wrapper.sh apply dev
+tofu apply tfplan-dev
+```
+
+### Validate Configuration
+```bash
+make validate
+./tofu-wrapper.sh validate
+tofu validate
+```
+
+### Format & Lint
+```bash
+make fmt
+./tofu-wrapper.sh fmt
+tofu fmt -recursive infrastructure/
+```
+
+### Security Scanning
+```bash
+make security-scan
+./tofu-wrapper.sh security-scan
+checkov -d infrastructure/ --framework terraform
+```
+
+## 📁 Directory Structure
 
 ```
 iaac/
-├── tofu/                        # Infrastructure as Code
-│   ├── main.tf                  # Root Terraform configuration
-│   ├── variables.tf             # Root variables definition
-│   ├── backend/                 # Backend service infrastructure
-│   │   ├── us-east-1/          # US East region configuration
-│   │   └── variables.tf
-│   ├── client/                  # Client service infrastructure
-│   │   ├── eu-west-1/          # EU West region configuration
-│   │   └── variables.tf
-│   ├── renderer/                # Renderer service infrastructure
-│   │   ├── ap-southeast-1/      # Asia Pacific region configuration
-│   │   └── variables.tf
-│   ├── databases/               # Database infrastructure
-│   │   ├── primary/             # Primary Aurora cluster
-│   │   ├── replicas/            # Aurora read replicas
-│   │   └── turso/               # Turso multi-region setup
-│   ├── storage/                 # Storage infrastructure
-│   │   ├── primary/             # Primary S3 bucket
-│   │   └── replicas/            # S3 replica buckets
-│   ├── networking/              # Networking infrastructure
-│   │   ├── global/              # Global resources (Route53, ACM, WAF)
-│   │   └── regional/            # Regional networking
-│   ├── modules/                 # Reusable modules
-│   │   ├── ecs-service/        # ECS service module
-│   │   ├── rds-cluster/        # RDS cluster module
-│   │   ├── s3-bucket/          # S3 bucket module
-│   │   ├── vpc/                # VPC module
-│   │   └── alb/                # Application Load Balancer module
-│   └── localstack/              # LocalStack configurations
+├── main.tf                          # Root OpenTofu config (sources infrastructure/)
+├── variables.tf                     # Root-level variables
+├── outputs.tf                       # Root-level outputs
+├── terraform.tfvars                 # Default variable values
+├── Makefile                         # Convenience commands
+├── tofu-wrapper.sh                  # Shell wrapper for OpenTofu
 │
-├── environments/                # Environment configuration files
-│   ├── dev.tfvars              # Development environment
-│   ├── staging.tfvars          # Staging environment
-│   └── prod.tfvars             # Production environment
-│
-├── ansible/                     # Configuration management
-│   ├── playbooks/              # Deployment playbooks
-│   │   ├── deploy-backend.yml
-│   │   ├── deploy-client.yml
-│   │   ├── deploy-renderer.yml
-│   │   └── rollback.yml
-│   ├── roles/                  # Ansible roles
-│   │   ├── backend/
-│   │   ├── client/
-│   │   ├── renderer/
-│   │   ├── database/
-│   │   └── common/
-│   ├── inventory/              # Inventory files
-│   │   ├── production/
-│   │   └── local/
-│   └── vars/                   # Variable files
-│       ├── common.yml          # Common variables
-│       ├── dev.yml             # Dev environment variables
-│       ├── staging.yml         # Staging environment variables
-│       └── prod.yml            # Production environment variables
-│
-├── local/                      # Local development configurations
-│   ├── docker-compose.backend.yml
-│   ├── docker-compose.client.yml
-│   ├── docker-compose.renderer.yml
-│   ├── docker-compose.full.yml
-│   ├── localstack.yml
-│   ├── coredns.conf/
-│   ├── localstack-config.hcl
-│   └── data/
-│
-├── scripts/                    # Utility scripts
-│   ├── validate.sh             # Validate configurations (NEW)
-│   ├── rollback.sh             # Rollback infrastructure changes (NEW)
-│   ├── state-management.sh     # Manage Terraform state (NEW)
-│   ├── deploy-local.sh         # Deploy locally
-│   ├── localstack.sh           # LocalStack management
-│   └── test-localstack.sh      # Test LocalStack setup
-│
-├── docs/                       # Documentation
-│   ├── architecture.md         # Architecture overview
-│   ├── deployment-guide.md     # Deployment procedures
-│   ├── disaster-recovery.md    # DR procedures (NEW)
-│   ├── secrets-management.md   # Secrets management guide (NEW)
-│   └── monitoring-logging.md   # Monitoring & logging setup (NEW)
-│
-└── README.md                   # This file
+├── infrastructure/                  # Main infrastructure module
+│   ├── main.tf                      # Infrastructure configuration
+│   ├── variables.tf                 # Module variables
+│   ├── outputs.tf                   # Module outputs
+│   ├── terraform.tfvars             # Default values
+│   │
+│   ├── modules/                     # Reusable infrastructure modules
+│   │   ├── neon/                    # Neon serverless PostgreSQL
+│   │   ├── networking/              # VPC, subnets, security groups
+│   │   ├── compute/                 # ECS, ALB, auto-scaling
+│   │   ├── storage/                 # S3, storage resources
+│   │   ├── security/                # IAM, KMS, encryption
+│   │   └── ecs-service/             # ECS service definitions
+│   │
+│   ├── environments/                # Environment-specific configs
+│   │   ├── dev/                     # Development environment
+│   │   │   ├── terraform.tfvars
+│   │   │   └── backend.hcl
+│   │   ├── staging/                 # Staging environment
+│   │   │   ├── terraform.tfvars
+│   │   │   └── backend.hcl
+│   │   └── prod/                    # Production environment
+│   │       ├── terraform.tfvars
+│   │       └── backend.hcl
+│   │
+│   ├── live/                        # Deployed infrastructure configs
+│   │   ├── global/                  # Global resources
+│   │   │   ├── databases/
+│   │   │   ├── networking/
+│   │   │   └── storage/
+│   │   └── regional/                # Region-specific configs
+│   │       ├── us-east-1/           # Backend services
+│   │       ├── eu-west-1/           # Client services
+│   │       └── ap-southeast-1/      # Renderer services
+│   │
+│   └── tests/                       # Infrastructure testing
+
+├── ansible/                         # Configuration management
+│   ├── playbooks/                   # Deployment playbooks
+│   ├── roles/                       # Ansible roles
+│   ├── inventory/                   # Inventory definitions
+│   └── vars/                        # Variable files
+
+├── local/                           # Local development
+│   ├── docker-compose.*.yml         # Docker Compose files
+│   ├── localstack.yml               # LocalStack for AWS emulation
+│   └── data/                        # Local data volumes
+
+├── scripts/                         # Helper scripts
+│   ├── deploy-local.sh
+│   ├── validate.sh
+│   ├── rollback.sh
+│   └── state-management.sh
+
+└── docs/                            # Existing documentation
+    ├── architecture.md
+    ├── deployment-guide.md
+    ├── secrets-management.md
+    ├── monitoring-logging.md
+    └── disaster-recovery.md
 ```
 
-## Prerequisites
+## 🎯 Environment Workflows
 
-- **AWS CLI** (v2+) configured with appropriate permissions
-- **OpenTofu** (>= v1.6) or Terraform (>= 1.0)
-- **Ansible** (>= 2.10) with python-boto3
-- **Docker** (>= 24.0) and **Docker Compose** (>= 2.20)
-- **Git** for version control
-- **jq** for JSON processing (optional but recommended)
+### Development Environment
 
-### Setup
+Deploy cost-optimized infrastructure for testing:
 
 ```bash
-# AWS CLI
-aws --version
+make init ENV=dev
+make plan ENV=dev
+make apply ENV=dev
 
-# OpenTofu
-tofu version
-
-# Ansible
-ansible --version
-
-# Docker
-docker --version
-docker compose version
-
-# Verify AWS credentials
-aws sts get-caller-identity
+# Cleanup when done
+make destroy ENV=dev
 ```
 
-## Deployment
+**Configuration:** Single region (us-east-1), small instance types, 7-day backup retention
 
-### Quick Start
+### Staging Environment
+
+Test production-like configuration before production:
 
 ```bash
-# 1. Validate configurations
-./scripts/validate.sh
-
-# 2. Deploy to local environment
-./scripts/deploy-local.sh full
-
-# 3. Access services
-# Backend API:    http://api.local.paymentform.com:8000
-# Client:         http://localhost:3000
-# Renderer:       http://localhost:3001
-# Health check:   http://api.local.paymentform.com:8000/health
+make init ENV=staging
+make plan ENV=staging
+make apply ENV=staging
 ```
 
-### Multi-Region Deployment (Production)
+**Configuration:** Multi-region, production-grade, 14-day backup retention
 
-#### Step 1: Prepare Environment
+### Production Environment
+
+Deploy production infrastructure with full HA/DR:
 
 ```bash
-# Copy and customize environment variables
-cp environments/prod.tfvars.example environments/prod.tfvars
-# Edit prod.tfvars with your values:
-# - domain_name
-# - db_username / db_password (store in AWS Secrets Manager)
-# - AWS account IDs for each region
+make init ENV=prod
+make plan ENV=prod -out=tfplan
+# Review plan carefully
+make apply ENV=prod
 ```
 
-#### Step 2: Initialize and Plan
+**Configuration:** Full multi-region HA, 30-day backup retention, enhanced security
+
+## 🔧 Using Makefile Commands
+
+All commands support environment selection with `ENV` variable:
 
 ```bash
-cd tofu/
-
-# Initialize Terraform with state management
-tofu init
-
-# Show planned infrastructure changes
-tofu plan -var-file=../environments/prod.tfvars
+# Common patterns
+make help                    # Show all available commands
+make init ENV=dev           # Initialize for environment
+make plan ENV=staging       # Plan changes for environment
+make apply ENV=prod         # Apply changes for environment
+make destroy ENV=dev        # Destroy infrastructure
+make validate               # Validate all configurations
+make fmt                    # Format all .tf files
+make lint                   # Validate and format
+make security-scan          # Run Checkov security checks
+make tfsec-scan            # Run tfsec security checks
+make clean                  # Remove temporary files
+make output ENV=dev        # Show outputs for environment
+make state-list            # List resources in state
+make refresh ENV=dev       # Refresh state
 ```
 
-#### Step 3: Deploy Infrastructure
+## 🧪 Testing & Validation
+
+### Quick Testing (3 Steps)
 
 ```bash
-# Deploy networking first
-tofu apply -target=module.networking -var-file=../environments/prod.tfvars
+# 1. Run complete testing suite
+make test-complete
 
-# Deploy databases
-tofu apply -target=module.database_cluster -var-file=../environments/prod.tfvars
+# 2. Test with LocalStack (local AWS emulation)
+make localstack-test
 
-# Deploy storage
-tofu apply -target=module.storage_bucket -var-file=../environments/prod.tfvars
-
-# Deploy services
-tofu apply -var-file=../environments/prod.tfvars
+# 3. Scan for security issues
+make security-full
 ```
 
-#### Step 4: Configure and Deploy Applications
+### Testing Components
+
+#### 1. LocalStack Testing
+Test infrastructure locally without AWS costs using Docker:
 
 ```bash
-cd ../ansible/
-
-# Deploy backend
-ansible-playbook -i inventory/production playbooks/deploy-backend.yml -e "environment=prod"
-
-# Deploy client
-ansible-playbook -i inventory/production playbooks/deploy-client.yml -e "environment=prod"
-
-# Deploy renderer
-ansible-playbook -i inventory/production playbooks/deploy-renderer.yml -e "environment=prod"
+make localstack-start        # Start LocalStack container
+make localstack-test         # Full test cycle (init → plan → apply → destroy)
+make localstack-stop         # Stop LocalStack
 ```
 
-### LocalStack Integration (Testing)
+**Benefits:**
+- ✅ Test infrastructure without AWS costs
+- ✅ Fast iteration during development
+- ✅ Test failure scenarios safely
+- ✅ Supports 50+ AWS services
 
-For testing infrastructure code locally without AWS costs:
+#### 2. Security Scanning
+Automatically scan for security misconfigurations:
 
 ```bash
-# Start LocalStack
-./scripts/localstack.sh start
-
-# Deploy infrastructure to LocalStack
-./scripts/localstack.sh deploy
-
-# Run tests
-./scripts/localstack.sh test
-
-# Clean up
-./scripts/localstack.sh destroy
-./scripts/localstack.sh stop
+make security-checkov        # Checkov compliance scanner
+make security-tfsec          # Tfsec AWS security scanner
+make security-full           # Run both scanners
 ```
 
-## Operations & Management
+**Checks:**
+- Unencrypted S3 buckets
+- Open security groups
+- Missing authentication
+- Best practice violations
 
-### Validation & Testing
-
-Before deploying, always validate your configurations:
+#### 3. Cost Estimation
+Estimate AWS costs before deployment:
 
 ```bash
-# Comprehensive validation
-./scripts/validate.sh
-
-# This checks:
-# ✓ Terraform syntax and formatting
-# ✓ Ansible playbook syntax and linting
-# ✓ Docker Compose configurations
-# ✓ Environment files
-# ✓ Hardcoded secrets
-# ✓ File permissions
-# ✓ Documentation completeness
+make cost-estimate ENV=dev               # Single environment
+make cost-estimate-all                   # All environments (dev/staging/prod)
 ```
 
-### State Management
+**Output:** Monthly cost estimates per service
 
-Safely manage Terraform state:
+#### 4. Complete Testing Suite
+Run all tests in sequence:
 
 ```bash
-# Backup current state
-./scripts/state-management.sh backup prod
+make test-complete
 
-# List available backups
-./scripts/state-management.sh list
-
-# Restore from backup
-./scripts/state-management.sh restore .state-backups/state-backup-prod-YYYYMMDD-HHMMSS
-
-# Validate state integrity
-./scripts/state-management.sh validate prod
-
-# View state (read-only)
-./scripts/state-management.sh view prod
-
-# Force unlock (use with caution)
-./scripts/state-management.sh lock prod
+# This runs:
+# 1. Code formatting & validation
+# 2. Checkov security scan
+# 3. Tfsec security scan
+# 4. Cost estimation (all environments)
+# 5. LocalStack deployment test
+# 6. Resource verification
 ```
 
-### Rollback Procedures
+### Testing Documentation
 
-If something goes wrong, safely rollback changes:
-
-```bash
-# Rollback infrastructure only
-./scripts/rollback.sh -e prod -t terraform -c
-
-# Rollback applications only
-./scripts/rollback.sh -e prod -t ansible -c
-
-# Full rollback (infrastructure + applications)
-./scripts/rollback.sh -e prod -t all -c
-
-# Options:
-# -e, --environment ENV    Environment (dev|staging|prod)
-# -t, --target TARGET      Target (terraform|ansible|all)
-# -c, --create-backup      Create backup before rollback
-```
-
-### Monitoring & Alerts
-
-See [Monitoring & Logging Guide](./docs/monitoring-logging.md) for:
-- CloudWatch metrics and dashboards
-- Log aggregation and analysis
-- Alert configuration
-- Health checks
-- Performance monitoring
-
-### Disaster Recovery
-
-See [Disaster Recovery Guide](./docs/disaster-recovery.md) for:
-- Backup and restore procedures
-- RTO/RPO targets
-- Failure scenarios
-- Emergency response procedures
-- DR testing and validation
-
-## Secrets & Security
-
-See [Secrets Management Guide](./docs/secrets-management.md) for comprehensive information on:
-
-- **Secret Storage**: AWS Secrets Manager, Parameter Store, Ansible Vault
-- **Best Practices**: Encryption, rotation, audit logging
-- **Access Control**: IAM roles, least privilege, break-glass access
-- **Environment Management**: Different secrets for each environment
-- **CI/CD Integration**: GitHub Actions, GitLab CI
-
-### Quick Reference
-
-```bash
-# Store a secret in AWS Secrets Manager
-aws secretsmanager create-secret \
-  --name paymentform/prod/db-password \
-  --secret-string "YOUR_SECURE_PASSWORD"
-
-# Retrieve secret in Terraform
-data "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = aws_secretsmanager_secret.db_password.id
-}
-
-# Rotate secrets
-aws secretsmanager rotate-secret \
-  --secret-id paymentform/prod/db-password \
-  --rotate-immediately
-```
-
-### Security Checklist
-
-- [ ] No hardcoded secrets in code
-- [ ] .env files added to .gitignore
-- [ ] AWS Secrets Manager configured with encryption
-- [ ] IAM roles follow least privilege principle
-- [ ] VPCs use security groups and NACLs
-- [ ] All data encrypted in transit (TLS 1.3+)
-- [ ] All data encrypted at rest (KMS)
-- [ ] CloudTrail enabled for audit logging
-- [ ] Secrets rotated regularly (90-180 days)
-
-## Troubleshooting
-
-### Common Issues
-
-#### Terraform Lock Issues
-```bash
-# State locked by another process?
-./scripts/state-management.sh lock prod
-
-# Check logs
-ls -la tofu/.terraform/.terraform.lock.hcl
-```
-
-#### Ansible Connection Issues
-```bash
-# Test inventory
-ansible all -i ansible/inventory/production -m ping
-
-# Check SSH keys
-ssh-add ~/.ssh/your-key.pem
-```
-
-#### LocalStack Issues
-```bash
-# Check LocalStack health
-curl http://localhost:4566/_localstack/health
-
-# View LocalStack logs
-docker logs localstack-main
-
-# Restart LocalStack
-./scripts/localstack.sh stop
-./scripts/localstack.sh start
-```
-
-### Getting Help
-
-- 📖 Check the [Architecture Documentation](./docs/architecture.md)
-- 🔍 Review [Deployment Guide](./docs/deployment-guide.md)
-- 🚨 See [Disaster Recovery Guide](./docs/disaster-recovery.md)
-- 💬 Enable debug logging:
-  ```bash
-  export TF_LOG=DEBUG
-  export ANSIBLE_DEBUG=True
-  ```
-
-## Environment-Specific Configurations
-
-### Development (dev.tfvars)
-- Single region (US East)
-- Minimal resources (t3.micro)
-- No multi-AZ or replicas
-- Log retention: 7 days
-- Backup retention: 7 days
-
-### Staging (staging.tfvars)
-- Single region (US East)
-- Medium resources (t3.small/medium)
-- Multi-AZ enabled
-- Log retention: 14 days
-- Backup retention: 14 days
-
-### Production (prod.tfvars)
-- Multi-region deployment
-- Large resources (t3.large+)
-- Multi-AZ and read replicas enabled
-- Cross-region backup enabled
-- Log retention: 30 days
-- Backup retention: 30 days
-
-## Cost Optimization
-
-- Use AWS Cost Explorer to track spending
-- Enable AWS Budgets for alerts
-- Review reserved capacity for production
-- Use appropriate instance types per environment
-- Leverage S3 lifecycle policies
-- Archive old logs to Glacier
-
-## Contributing
-
-1. Create a feature branch
-2. Validate changes: `./scripts/validate.sh`
-3. Test locally with LocalStack
-4. Create backup: `./scripts/state-management.sh backup prod`
-5. Deploy to staging first
-6. Create pull request with detailed description
-7. Peer review before merging
-8. Deploy to production after approval
-
-## Version History
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2026-01-20 | Initial release with multi-region support |
-| 1.1.0 | 2026-01-20 | Added validation, rollback, state management scripts |
-| 1.2.0 | 2026-01-20 | Added comprehensive documentation |
-
-## Support & Contact
-
-- **On-Call Engineer**: Check PagerDuty rotation
-- **Slack Channel**: #infrastructure
-- **Documentation**: See `/docs` directory
-- **Issues**: Create GitHub issue with `[iaac]` prefix
+For comprehensive guides, see:
+- **[Testing Quick Start](./TESTING-QUICK-START.md)** - Fast reference for all testing commands
+- **[Full Testing Guide](./docs/testing-and-validation.md)** - Detailed explanations with examples
+- **[Cost Estimation Guide](./docs/cost-estimation.md)** - How to count costs before deployment
+- **[Best Practices](./docs/best-practices.md)** - Dos & Don'ts, cost optimization, things to avoid
 
 ---
 
-**Last Updated**: 2026-01-20
-**Maintained By**: Infrastructure Team
-**Next Review**: 2026-04-20
+## �️ Database: Neon (Serverless PostgreSQL)
+
+This infrastructure uses **Neon** instead of RDS for significant cost savings and zero management.
+
+### Neon Benefits
+- ✅ 75% cheaper than RDS (pay-per-use)
+- ✅ Automatic scaling and backups
+- ✅ Built-in connection pooling
+- ✅ Point-in-time recovery
+- ✅ Encryption at rest & in transit
+- ✅ Free tier for development
+
+### Get Database Connection
+
+```bash
+# After deployment, retrieve connection details
+tofu output -json | jq '.database_host, .database_name, .database_app_role'
+
+# Get connection string
+tofu output -raw neon_connection_string
+```
+
+### Update Laravel .env
+
+```bash
+DB_CONNECTION=pgsql
+DB_HOST=<database_host from output>
+
+### Standard Deployment
+
+1. **Plan changes** in isolated environment
+2. **Review plan** for unexpected changes
+3. **Get approval** for production changes
+4. **Apply changes** using saved plan
+5. **Verify** resources are created correctly
+6. **Monitor** metrics and logs
+
+### Example
+
+```bash
+# Development - quick iteration
+make plan ENV=dev
+make apply ENV=dev
+
+# Staging - full test
+make plan ENV=staging
+make apply ENV=staging
+
+# Production - careful promotion
+make plan ENV=prod -out=tfplan
+# Review tfplan
+make apply ENV=prod
+```
+
+### Rollback Procedure
+
+If deployment fails or needs rollback:
+
+```bash
+# For state-based rollback (if versioning enabled)
+aws s3api list-object-versions \
+  --bucket paymentform-terraform-state-prod
+
+# Restore previous state version and apply
+make apply ENV=prod
+```
+
+## 🧪 Validation & Testing
+
+### Before Every Deployment
+
+```bash
+# Syntax validation
+tofu validate
+
+# Format check
+tofu fmt -recursive infrastructure/
+
+# Security scanning
+checkov -d infrastructure/ --framework terraform
+tfsec infrastructure/
+```
+
+### Using Makefile
+
+```bash
+# All in one
+make lint
+
+# Individual checks
+make validate
+make fmt
+make security-scan
+```
+
+## 📊 State Management
+
+### State Files Location
+
+| Environment | Bucket | Path |
+|-------------|--------|------|
+| Development | `paymentform-terraform-state-dev` | `dev/terraform.tfstate` |
+| Staging | `paymentform-terraform-state-staging` | `staging/terraform.tfstate` |
+| Production | `paymentform-terraform-state-prod` | `prod/terraform.tfstate` |
+
+### State Operations
+
+```bash
+# List resources in state
+tofu state list
+
+# Show specific resource details
+tofu state show 'module.infrastructure.aws_instance.example'
+
+# Refresh state from AWS
+tofu refresh -var-file=infrastructure/environments/dev/terraform.tfvars
+
+# Manual state manipulation (use cautiously)
+tofu state rm 'resource.id'
+tofu state mv 'old.resource' 'new.resource'
+```
+
+## 🔍 Common Issues & Troubleshooting
+
+### Issue: "Error acquiring the state lock"
+
+**Cause:** Another operation has the state lock  
+**Solution:**
+```bash
+# Find lock ID
+tofu state show
+
+# Force unlock (use only if process is truly stuck)
+tofu force-unlock <lock-id>
+```
+
+### Issue: "Resource already exists in AWS"
+
+**Cause:** Resource created outside of OpenTofu  
+**Solution:**
+```bash
+# Import existing resource into state
+tofu import 'resource.type' <resource-id>
+```
+
+### Issue: "Invalid credentials"
+
+**Cause:** AWS credentials not configured  
+**Solution:**
+```bash
+# Configure AWS credentials
+aws configure
+
+# Or use environment variables
+export AWS_ACCESS_KEY_ID=xxx
+export AWS_SECRET_ACCESS_KEY=xxx
+export AWS_DEFAULT_REGION=us-east-1
+```
+
+## 📈 Multi-Region Strategy
+
+### Regional Distribution
+
+| Region | Purpose | Services |
+|--------|---------|----------|
+| us-east-1 | Primary | Backend, Primary DB, Main ALB |
+| eu-west-1 | Secondary | Client Dashboard, Read Replica |
+| ap-southeast-1 | Tertiary | Renderer, Read Replica |
+
+### Deployment Across Regions
+
+```bash
+# Deploy to primary region
+make apply ENV=prod  # us-east-1
+
+# Cross-region replication happens automatically
+# Verify secondary regions
+tofu output -var-file=infrastructure/environments/prod/terraform.tfvars
+```
+
+## 🔄 CI/CD Integration
+
+### Prerequisites for Automation
+
+- AWS credentials with appropriate permissions
+- GitHub Actions or GitLab CI runner configured
+- Pre-commit hooks installed locally
+
+### Typical Pipeline
+
+1. Push code to branch
+2. ✅ Syntax validation (`tofu validate`)
+3. ✅ Security scanning (Checkov, tfsec)
+4. ✅ Plan generation (`tofu plan`)
+5. ✅ PR comments with changes
+6. ✅ Manual approval for production
+7. ✅ Auto-deployment on merge
+
+## 📚 Additional Resources
+
+### Existing Documentation
+- **Architecture:** `docs/architecture.md`
+- **Deployment:** `docs/deployment-guide.md`
+- **Secrets:** `docs/secrets-management.md`
+- **Monitoring:** `docs/monitoring-logging.md`
+- **Disaster Recovery:** `docs/disaster-recovery.md`
+
+### External Resources
+- [OpenTofu Documentation](https://opentofu.org/docs/)
+- [AWS Terraform Provider](https://registry.terraform.io/providers/hashicorp/aws/latest)
+- [Infrastructure Best Practices](https://www.terraform.io/docs/cloud/guides/recommended-practices.html)
+- [AWS Security Best Practices](https://docs.aws.amazon.com/security/)
+
+## ⚠️ Important Notes
+
+### Before Production Deployment
+
+- [ ] State backend is configured and tested
+- [ ] All variables are set correctly
+- [ ] Security scanning passed
+- [ ] Team has reviewed plan
+- [ ] Approval obtained
+- [ ] Rollback plan documented
+- [ ] Monitoring configured
+- [ ] Backups enabled
+
+### Never
+
+- ❌ Commit state files to git
+- ❌ Hardcode secrets in configurations
+- ❌ Share AWS credentials
+- ❌ Modify state manually without backup
+- ❌ Deploy without testing in lower environment
+- ❌ Skip security scanning
+- ❌ Ignore validation errors
+
+## 🆘 Support & Questions
+
+### Quick Help
+
+```bash
+make help                    # Show all Makefile targets
+./tofu-wrapper.sh help      # Show wrapper script help
+tofu help                   # Show OpenTofu help
+```
+
+### Team Communication
+
+- **Slack:** #infrastructure
+- **Email:** infrastructure-team@company.com
+- **Docs:** See `docs/` directory
+- **On-Call:** Check PagerDuty schedule
+
+## 📝 Version Information
+
+- **OpenTofu:** >= 1.5
+- **AWS Provider:** ~> 5.0
+- **Last Updated:** January 2026
+- **Maintainer:** Infrastructure Team
+
+---
+
+**Start with:** `make help` to see all available commands
+
+**Next Steps:** Choose your environment (dev/staging/prod) and follow the workflow above

@@ -1,0 +1,99 @@
+# Infrastructure module main configuration
+# This file sources all infrastructure modules
+
+# Networking module
+module "networking" {
+  source = "./modules/networking"
+
+  environment         = var.environment
+  vpc_cidr           = var.vpc_cidr
+  availability_zones = var.availability_zones
+  public_subnet_cidrs = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  enable_nat_gateway = var.enable_nat_gateway
+  standard_tags      = local.standard_tags
+}
+
+# Security module
+module "security" {
+  source = "./modules/security"
+
+  environment = var.environment
+  vpc_id      = module.networking.vpc_id
+  app_ports   = var.app_ports
+  neon_api_key_secret_arn = var.neon_api_key_secret_arn
+  turso_token_secret_arn = var.turso_token_secret_arn
+  enable_strict_security = var.enable_strict_security
+  standard_tags = local.standard_tags
+}
+
+# ALB module
+module "alb" {
+  source = "./modules/alb"
+
+  environment = var.environment
+  vpc_id = module.networking.vpc_id
+  public_subnet_ids = module.networking.public_subnet_ids
+  alb_security_group_id = module.security.alb_security_group_id
+  ssl_certificate_arn = var.ssl_certificate_arn
+  enable_deletion_protection = var.enable_deletion_protection
+  standard_tags = local.standard_tags
+  enable_access_logs = var.enable_alb_access_logs
+}
+
+# Storage module
+module "storage" {
+  source = "./modules/storage"
+
+  environment = var.environment
+  standard_tags = local.standard_tags
+  enable_versioning = var.enable_versioning
+  enable_cloudfront = var.enable_cloudfront
+  log_retention_days = var.log_retention_days
+  cors_allowed_origins = var.cors_allowed_origins
+}
+
+# Compute module
+module "compute" {
+  source = "./modules/compute"
+
+  environment = var.environment
+  subnet_ids = module.networking.private_subnet_ids
+  instance_type = var.instance_type
+  ami_id = var.ami_id
+  key_pair_name = var.key_pair_name
+  min_size = var.min_size
+  max_size = var.max_size
+  desired_capacity = var.desired_capacity
+  scaling_cpu_threshold = var.scaling_cpu_threshold
+  scaling_down_cpu_threshold = var.scaling_down_cpu_threshold
+  standard_tags = local.standard_tags
+  detailed_monitoring = var.detailed_monitoring
+  ebs_optimized = var.ebs_optimized
+  root_volume_size = var.root_volume_size
+  root_volume_type = var.root_volume_type
+  ecs_cluster_name = var.ecs_cluster_name
+  ecs_security_group_id = module.security.ecs_security_group_id
+}
+
+# Neon database module
+module "neon_database" {
+  source = "./modules/neon"
+
+  neon_api_key    = var.neon_api_key
+  neon_region     = var.neon_region_map[var.region]
+  resource_prefix = local.resource_prefix
+  environment     = var.environment
+  standard_tags   = local.standard_tags
+}
+
+# Turso database module
+module "turso_database" {
+  source = "./modules/turso"
+
+  turso_api_token = var.turso_api_token
+  turso_group     = var.turso_group
+  resource_prefix = local.resource_prefix
+  environment     = var.environment
+  standard_tags   = local.standard_tags
+}
