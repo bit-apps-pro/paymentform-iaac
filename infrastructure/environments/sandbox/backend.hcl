@@ -1,7 +1,7 @@
-# Backend configuration for staging environment state management
+# Backend configuration for sandbox environment state management
 
-bucket         = "paymentform-terraform-state-staging"
-key            = "staging/terraform.tfstate"
+bucket         = "paymentform-terraform-state-sandbox"
+key            = "sandbox/terraform.tfstate"
 region         = "us-east-1"
 dynamodb_table = "paymentform-terraform-lock"
 encrypt        = true

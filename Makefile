@@ -34,7 +34,7 @@ help:
 	@echo ""
 	@echo "Usage: make [target] ENV=<env> REGION=<region>"
 	@echo ""
-	@echo "Environments: dev, staging, prod (default: dev)"
+	@echo "Environments: dev, sandbox, prod (default: dev)"
 	@echo "Region: AWS region (default: us-east-1)"
 	@echo ""
 	@echo "Core Targets:"
@@ -73,7 +73,7 @@ help:
 	@echo "Examples:"
 	@echo "  make install-tools"
 	@echo "  make init ENV=dev"
-	@echo "  make plan ENV=staging"
+	@echo "  make plan ENV=sandbox"
 	@echo "  make apply ENV=prod"
 	@echo "  make localstack-start"
 	@echo "  make cost-estimate ENV=dev"
@@ -158,8 +158,8 @@ refresh:
 dev: ENV=dev
 dev: plan
 
-staging: ENV=staging
-staging: plan
+sandbox: ENV=sandbox
+sandbox: plan
 
 prod: ENV=prod
 prod: plan
@@ -258,7 +258,7 @@ cost-estimate:
 cost-estimate-all:
 	@echo "💰 Estimating costs for all environments..."
 	@if command -v infracost >/dev/null 2>&1; then \
-		for env in dev staging prod; do \
+		for env in dev sandbox prod; do \
 			echo ""; \
 			echo "📊 $$env environment:"; \
 			infracost breakdown --path infrastructure/environments/$$env/ --format table; \
@@ -292,7 +292,7 @@ test-complete: validate fmt security-full cost-estimate-all localstack-test
 	@echo "  - security-checkov-report.json"
 	@echo "  - security-tfsec-report.json"
 	@echo "  - cost-estimate-dev.json"
-	@echo "  - cost-estimate-staging.json"
+	@echo "  - cost-estimate-sandbox.json"
 	@echo "  - cost-estimate-prod.json"
 	@echo ""
 	@echo "🚀 Next steps:"

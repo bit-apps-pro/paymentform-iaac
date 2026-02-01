@@ -2,49 +2,63 @@
 
 ## Architecture Overview
 
-This Infrastructure as Code (IaC) implements a multi-region deployment for the Payment Form application with the following characteristics:
+This Infrastructure as Code (IaC) implements a globally distributed deployment for the Payment Form application with the following characteristics:
 
-- **Backend**: Hosted in US East (Virginia) region
-- **Client Dashboard**: Hosted in EU West (Ireland) region  
-- **Renderer (Multi-tenant)**: Hosted in Asia Pacific (Singapore) region
-- **Databases**: Primary Aurora in US East with read replicas in other regions, plus Turso for tenant databases
-- **Storage**: S3 with cross-region replication
-- **Load Balancing**: Regional ALBs with Route53 latency-based routing
+- **Backend**: Multi-region deployment (US East, EU West, Asia Pacific) using FrankenPHP with libsql extension
+- **Client Dashboard**: Global CDN deployment via CloudFront for worldwide low-latency access
+- **Renderer (Multi-tenant)**: Global CDN deployment via CloudFront for ultra-fast form rendering
+- **Databases**: Neon serverless PostgreSQL for central data + Turso edge databases for tenant data
+- **Storage**: S3 with CloudFront CDN for global asset delivery
+- **Load Balancing**: Regional ALBs with Route53 latency-based routing for backend services
+- **Reverse Proxy**: Traefik for automatic service discovery and multi-tenant subdomain routing
 
 ## Directory Structure
 
 ```
 paymentform-iac/
-├── tofu/                     # OpenTofu/Terraform configurations
-│   ├── backend/              # Backend service infrastructure
-│   │   └── us-east-1/        # US East region configuration
-│   ├── client/               # Client service infrastructure
-│   │   └── eu-west-1/        # EU West region configuration
-│   ├── renderer/             # Renderer service infrastructure
-│   │   └── ap-southeast-1/   # Asia Pacific region configuration
-│   ├── databases/            # Database infrastructure
-│   │   ├── primary/          # Primary Aurora cluster
-│   │   ├── replicas/         # Aurora read replicas
-│   │   └── turso/            # Turso multi-region setup
-│   ├── storage/              # Storage infrastructure
-│   │   ├── primary/          # Primary S3 bucket
-│   │   └── replicas/         # S3 replica buckets
-│   ├── networking/           # Networking infrastructure
-│   │   ├── global/           # Global resources (Route53, ACM, WAF)
-│   │   └── regional/         # Regional networking
-│   └── modules/              # Reusable modules
-│       ├── ecs-service/      # ECS service module
-│       ├── rds-cluster/      # RDS cluster module
-│       ├── s3-bucket/        # S3 bucket module
-│       └── vpc/              # VPC module
-├── ansible/                  # Ansible automation
-│   ├── inventory/            # Inventory files
+├── infrastructure/               # Main infrastructure module
+│   ├── modules/                 # Reusable modules
+│   │   ├── neon/               # Neon serverless PostgreSQL
+│   │   ├── turso/              # Turso edge databases
+│   │   ├── networking/         # VPC, subnets, security groups
+│   │   ├── compute/            # ECS, ALB, auto-scaling
+│   │   ├── storage/            # S3, CloudFront CDN
+│   │   ├── security/           # IAM, KMS, encryption
+│   │   └── alb/                # Application Load Balancers
+│   │
+│   ├── environments/           # Environment-specific configs
+│   │   ├── dev/               # Development environment
+│   │   ├── staging/           # Staging environment
+│   │   └── prod/              # Production environment
+│   │
+│   └── live/                  # Deployed infrastructure configs
+│       ├── global/            # Global resources (CDN, DNS)
+│       └── regional/          # Region-specific backend services
+│           ├── us-east-1/    # US backend region
+│           ├── eu-west-1/    # EU backend region
+│           └── ap-southeast-1/ # APAC backend region
+│
+├── ansible/                   # Configuration management
 │   ├── playbooks/            # Deployment playbooks
 │   ├── roles/                # Ansible roles
+│   ├── inventory/            # Inventory definitions
 │   └── vars/                 # Variable files
-├── local/                    # Local development configurations
-├── scripts/                  # Utility scripts
+│
+├── local/                    # Local development
+│   ├── docker-compose.*.yml  # Docker Compose files
+│   └── localstack.yml        # LocalStack for AWS emulation
+│
+├── scripts/                  # Helper scripts
+│   ├── deploy-local.sh
+│   ├── validate.sh
+│   └── rollback.sh
+│
 └── docs/                     # Documentation
+    ├── architecture.md
+    ├── deployment-guide.md
+    ├── secrets-management.md
+    ├── monitoring-logging.md
+    └── disaster-recovery.md
 ```
 
 ## Deployment Process
@@ -54,50 +68,78 @@ paymentform-iac/
 1. Install OpenTofu (>= v1.6) or Terraform
 2. Install Ansible (>= v2.10)
 3. Configure AWS CLI with appropriate permissions
-4. Ensure Docker and Docker Compose are available for local deployments
+4. Setup Neon account ([Sign up](https://neon.tech)) - Central PostgreSQL database
+5. Setup Turso account ([Sign up](https://turso.tech)) - Edge tenant databases
+6. Configure Cloudflare for DNS and CDN
+7. Setup GitHub Container Registry for Docker images
 
-### Multi-Region Deployment Steps
+### Backend Technology
+
+**FrankenPHP** - Modern PHP application server with built-in features:
+- Native libsql extension for Turso database support
+- HTTP/2 and HTTP/3 support
+- Built-in worker mode for better performance
+- Lower memory footprint than traditional PHP-FPM
+
+### Multi-Region Backend Deployment Steps
 
 1. **Initialize OpenTofu**:
    ```bash
-   cd tofu/
-   tofu init
+   cd iaac/
+   make init ENV=prod
    ```
 
 2. **Plan the infrastructure**:
    ```bash
-   tofu plan -var-file=../environments/prod.tfvars
+   make plan ENV=prod
    ```
 
 3. **Deploy the infrastructure**:
    ```bash
-   tofu apply -var-file=../environments/prod.tfvars
+   make apply ENV=prod
    ```
 
 4. **Deploy applications using Ansible**:
    ```bash
-   ansible-playbook -i inventory/production playbooks/deploy-backend.yml
-   ansible-playbook -i inventory/production playbooks/deploy-client.yml
-   ansible-playbook -i inventory/production playbooks/deploy-renderer.yml
+   ansible-playbook -i ansible/inventory/production ansible/playbooks/deploy-backend.yml
+   ansible-playbook -i ansible/inventory/production ansible/playbooks/deploy-client.yml
+   ansible-playbook -i ansible/inventory/production ansible/playbooks/deploy-renderer.yml
    ```
 
 ### Regional Deployment Order
 
 For proper dependencies, deploy in this order:
 
-1. **Networking (Global)**: Route53 zones, certificates
-2. **Databases**: Primary Aurora cluster
-3. **Storage**: Primary S3 bucket with replication
-4. **Services**: Backend, Client, Renderer in their respective regions
+1. **Global Networking**: Route53 zones, ACM certificates, CloudFront distributions
+2. **Databases**: Neon PostgreSQL (central), Turso configuration (edge tenants)
+3. **Storage**: S3 buckets with CloudFront CDN integration
+4. **Backend Services**: Multi-region ECS deployment (us-east-1, eu-west-1, ap-southeast-1)
+5. **Frontend Assets**: Upload to S3, invalidate CloudFront caches
 
 ## Traffic Routing Strategy
 
-The architecture implements intelligent traffic routing:
+The architecture implements intelligent global traffic routing:
 
-1. **Latency-Based Routing**: Route53 directs users to the geographically closest region
-2. **Application-Level Routing**: Each region serves its designated function
-3. **Failover Protection**: Health checks and failover routing ensure high availability
-4. **CDN Integration**: CloudFront caches static content globally
+1. **Backend Services (Multi-Region)**:
+   - Route53 latency-based routing directs API requests to nearest backend region
+   - Health checks ensure failover to healthy regions
+   - Regions: us-east-1, eu-west-1, ap-southeast-1
+
+2. **Frontend Applications (Global CDN)**:
+   - CloudFront edge locations serve client and renderer globally
+   - Cached at 300+ edge locations worldwide
+   - Origin: S3 bucket with optimized caching policies
+   - Sub-second latency for users anywhere in the world
+
+3. **Multi-Tenant Subdomain Routing**:
+   - Wildcard DNS: `*.renderer.yourdomain.com` → CloudFront → Origin
+   - Traefik backend inspects Host header for tenant identification
+   - Automatic routing to correct tenant's Turso database
+
+4. **Failover Protection**:
+   - Backend: Automated failover between regions via Route53 health checks
+   - Frontend: CloudFront handles origin failures automatically
+   - Database: Neon automatic failover, Turso edge replication
 
 ## Security Features
 
@@ -111,12 +153,45 @@ The architecture implements intelligent traffic routing:
 
 ## Multi-Tenancy Support
 
-The renderer service is designed for multi-tenancy:
+The renderer service is designed for massive multi-tenancy:
 
-- Tenant-specific subdomains (e.g., tenant1.renderer.paymentform.com)
-- Isolated tenant data in Turso database
-- Shared infrastructure with logical separation
-- Scalable architecture supporting thousands of tenants
+### Subdomain Strategy
+
+**Option 1: Wildcard Subdomains (RECOMMENDED)**
+- Configuration: `*.renderer.paymentform.com` DNS record
+- Example: `tenant1.renderer.paymentform.com`, `tenant2.renderer.paymentform.com`
+- Benefits:
+  - ✅ Instant tenant provisioning (no DNS changes required)
+  - ✅ Unlimited scalability (no API rate limits)
+  - ✅ Zero per-tenant costs
+  - ✅ Simple Traefik configuration
+
+**Option 2: On-Demand DNS Records via Cloudflare API**
+- Create individual DNS records programmatically
+- Example: `customdomain.com` → Managed via Cloudflare API
+- Use Cases:
+  - Enterprise customers requiring custom domains
+  - White-label solutions
+- Limitations:
+  - ⚠️ API rate limits: 1200 requests per 5 minutes
+  - ⚠️ DNS propagation delays
+  - ⚠️ Additional provisioning complexity
+
+**Implementation Decision**: Use wildcard subdomains as default. Implement on-demand DNS for premium/enterprise tier only.
+
+### Data Isolation
+
+- **Per-Tenant Turso Database**: Each tenant gets isolated SQLite database with edge replication
+- **Shared Infrastructure**: Cost-efficient resource usage via logical separation
+- **Security**: Row-level security policies prevent cross-tenant data access
+- **Performance**: FrankenPHP libsql extension provides native database access
+
+### Scalability
+
+- Supports thousands of tenants on shared infrastructure
+- Horizontal scaling via ECS auto-scaling
+- Edge replication ensures low latency globally
+- CloudFront caching reduces origin load
 
 ## Local Development
 
@@ -146,8 +221,73 @@ For local development and testing:
 
 ## Disaster Recovery
 
-- Multi-region deployment provides geographic redundancy
-- Database replication ensures data durability
-- Automated backups with configurable retention
-- Rapid recovery procedures documented
-- Regular disaster recovery testing recommended
+- **Multi-region backend deployment** provides geographic redundancy
+- **CloudFront CDN** ensures frontend availability even if origin is temporarily unavailable
+- **Database replication**: 
+  - Neon: Automated backups with point-in-time recovery
+  - Turso: Edge replication across multiple regions
+- **Automated backups** with configurable retention (7/14/30 days by environment)
+- **Infrastructure as Code**: Rapid infrastructure recovery via OpenTofu
+- **Blue-Green Deployments**: Zero-downtime updates using ECS task definition versioning
+- **Regular disaster recovery testing** recommended
+
+## Container Registry Strategy
+
+### Recommended: GitHub Container Registry (GHCR)
+
+**Pricing:**
+- 500MB storage free
+- $0.008/GB/month after free tier
+- 1GB data transfer free
+- $0.50/GB after free tier
+
+**Benefits:**
+- ✅ Most cost-effective for small-medium teams
+- ✅ Native GitHub Actions integration
+- ✅ Simple authentication with GitHub tokens
+- ✅ No separate infrastructure to manage
+- ✅ Public images are free (unlimited storage/bandwidth)
+
+**Setup:**
+```bash
+# Build and push to GHCR
+docker build -t ghcr.io/username/paymentform-backend:latest .
+echo $GITHUB_TOKEN | docker login ghcr.io -u username --password-stdin
+docker push ghcr.io/username/paymentform-backend:latest
+```
+
+### Alternative: AWS ECR
+
+**Pricing:**
+- $0.10/GB/month storage
+- $0.09/GB data transfer (egress to internet)
+
+**Use Cases:**
+- ✅ Multi-region image replication required
+- ✅ Compliance requires AWS-only infrastructure
+- ✅ Heavy cross-region usage within AWS
+
+**Trade-offs:**
+- ❌ ~12x more expensive than GHCR for storage
+- ❌ Egress charges can add up significantly
+
+### Alternative: Google Artifact Registry
+
+**Pricing:**
+- $0.10/GB/month storage
+- Regional egress charges vary
+
+**Use Cases:**
+- Only if using GCP services
+- Not recommended for AWS-based deployments
+
+### Decision Matrix
+
+| Scenario | Recommended Registry |
+|----------|---------------------|
+| Startup/Small Team | GitHub Container Registry |
+| AWS-Native Requirements | AWS ECR |
+| Multi-Cloud Strategy | GitHub Container Registry |
+| High-Volume Multi-Region | AWS ECR with replication |
+
+**Default Choice**: GitHub Container Registry for optimal cost-to-benefit ratio.

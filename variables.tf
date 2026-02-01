@@ -22,6 +22,30 @@ variable "region" {
 }
 
 variable "environment" {
-  description = "Deployment environment (dev, staging, prod)"
+  description = "Deployment environment (dev, sandbox, prod)"
   type        = string
+}
+
+# Domain and subdomain configuration
+variable "domain_name" {
+  description = "Root domain name for the application"
+  type        = string
+}
+
+variable "api_subdomain" {
+  description = "API subdomain for backend services (e.g., api.sandbox.paymentform.io)"
+  type        = string
+  default     = ""
+}
+
+variable "app_subdomain" {
+  description = "App subdomain for client dashboard (e.g., app.sandbox.paymentform.io)"
+  type        = string
+  default     = ""
+}
+
+variable "renderer_subdomain" {
+  description = "Renderer subdomain for multi-tenant forms (e.g., *.sandbox.paymentform.io)"
+  type        = string
+  default     = ""
 }

@@ -2,6 +2,86 @@
 
 Production-ready infrastructure for the Payment Form application using OpenTofu (Terraform), supporting multi-region deployment across AWS.
 
+## 🏗️ Architecture Overview
+
+### Multi-Region Strategy
+- **Backend**: Multi-region deployment (us-east-1, eu-west-1, ap-southeast-1) with FrankenPHP + libsql extension
+- **Client**: Global CDN deployment via CloudFront - Serves dashboard worldwide
+- **Renderer**: Global CDN deployment via CloudFront - Ultra-low latency for tenant forms
+- **Reverse Proxy**: Traefik for automatic service discovery and tenant routing
+
+### Database Architecture
+- **Neon**: Serverless PostgreSQL for central control plane (75% cheaper than RDS)
+- **Turso**: Edge-replicated SQLite per tenant (ultra-low latency with FrankenPHP libsql)
+- **Use Case**: Neon for accounts/billing, Turso for tenant forms/submissions
+
+### Multi-Tenancy Strategy
+
+**✅ RECOMMENDED: Wildcard Subdomains**
+
+Configure DNS: `*.renderer.yourdomain.com` → Traefik automatically routes to correct tenant
+
+**Benefits:**
+- Instant tenant provisioning (no DNS API calls)
+- No rate limits or per-record costs
+- Scales to unlimited tenants
+- Traefik handles routing via Host header matching
+
+**Alternative: On-Demand DNS Records**
+
+Use Cloudflare API to create individual DNS records per tenant
+
+**Trade-offs:**
+- ⚠️ API rate limits (1200 req/5min)
+- ⚠️ Propagation delays
+- ✅ Custom domains for enterprise customers
+
+**Decision**: Use wildcard for standard tenants, on-demand DNS only for custom domain requirements.
+
+### Container Registry Comparison
+
+| Registry | Storage Cost | Transfer Cost | Best For |
+|----------|-------------|---------------|----------|
+| **GitHub Container Registry** ✅ | $0.008/GB after 500MB free | $0.50/GB after 1GB free | Small-medium teams, tight GitHub integration |
+| AWS ECR | $0.10/GB | $0.09/GB egress | Multi-region replication, AWS-native |
+| Google Artifact Registry | $0.10/GB | Regional egress fees | GCP-native deployments |
+
+**Recommendation**: **GitHub Container Registry (GHCR)** for cost-effectiveness and simplicity.
+
+### Cost Estimates
+
+| Environment | Monthly Cost | Use Case |
+|-------------|-------------|----------|
+| Development | $60-100 | Testing, single region |
+| Sandbox | $300-500 | Public testing (sandbox.paymentform.io) |
+| Production | $800-1500+ | Multi-region HA with auto-scaling |
+
+*Detailed breakdown: `./docs/cost-estimation.md`*
+
+## 🌐 Subdomain Structure
+
+Each environment uses a specific subdomain structure:
+
+### Sandbox (Public Testing)
+- **Domain**: `sandbox.paymentform.io`
+- **Backend API**: `api.sandbox.paymentform.io`
+- **Client Dashboard**: `app.sandbox.paymentform.io`
+- **Multi-tenant Renderer**: `*.sandbox.paymentform.io` (wildcard)
+  - Example: `tenant1.sandbox.paymentform.io`, `tenant2.sandbox.paymentform.io`
+
+### Production
+- **Domain**: `paymentform.io`
+- **Backend API**: `api.paymentform.io`
+- **Client Dashboard**: `app.paymentform.io`
+- **Multi-tenant Renderer**: `*.paymentform.io` (wildcard)
+  - Example: `tenant1.paymentform.io`, `tenant2.paymentform.io`
+
+### Development (Local)
+- **Domain**: `dev.paymentform.local`
+- **Backend API**: `api.dev.paymentform.local`
+- **Client Dashboard**: `app.dev.paymentform.local`
+- **Multi-tenant Renderer**: `*.dev.paymentform.local` (wildcard)
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -116,7 +196,7 @@ iaac/
 │   │   ├── dev/                     # Development environment
 │   │   │   ├── terraform.tfvars
 │   │   │   └── backend.hcl
-│   │   ├── staging/                 # Staging environment
+│   │   ├── sandbox/                 # Sandbox environment
 │   │   │   ├── terraform.tfvars
 │   │   │   └── backend.hcl
 │   │   └── prod/                    # Production environment
@@ -177,14 +257,14 @@ make destroy ENV=dev
 
 **Configuration:** Single region (us-east-1), small instance types, 7-day backup retention
 
-### Staging Environment
+### Sandbox Environment
 
 Test production-like configuration before production:
 
 ```bash
-make init ENV=staging
-make plan ENV=staging
-make apply ENV=staging
+make init ENV=sandbox
+make plan ENV=sandbox
+make apply ENV=sandbox
 ```
 
 **Configuration:** Multi-region, production-grade, 14-day backup retention
@@ -210,7 +290,7 @@ All commands support environment selection with `ENV` variable:
 # Common patterns
 make help                    # Show all available commands
 make init ENV=dev           # Initialize for environment
-make plan ENV=staging       # Plan changes for environment
+make plan ENV=sandbox       # Plan changes for environment
 make apply ENV=prod         # Apply changes for environment
 make destroy ENV=dev        # Destroy infrastructure
 make validate               # Validate all configurations
@@ -276,7 +356,7 @@ Estimate AWS costs before deployment:
 
 ```bash
 make cost-estimate ENV=dev               # Single environment
-make cost-estimate-all                   # All environments (dev/staging/prod)
+make cost-estimate-all                   # All environments (dev/sandbox/prod)
 ```
 
 **Output:** Monthly cost estimates per service
@@ -350,9 +430,9 @@ DB_HOST=<database_host from output>
 make plan ENV=dev
 make apply ENV=dev
 
-# Staging - full test
-make plan ENV=staging
-make apply ENV=staging
+# Sandbox - full test
+make plan ENV=sandbox
+make apply ENV=sandbox
 
 # Production - careful promotion
 make plan ENV=prod -out=tfplan
@@ -408,7 +488,7 @@ make security-scan
 | Environment | Bucket | Path |
 |-------------|--------|------|
 | Development | `paymentform-terraform-state-dev` | `dev/terraform.tfstate` |
-| Staging | `paymentform-terraform-state-staging` | `staging/terraform.tfstate` |
+| Sandbox | `paymentform-terraform-state-sandbox` | `sandbox/terraform.tfstate` |
 | Production | `paymentform-terraform-state-prod` | `prod/terraform.tfstate` |
 
 ### State Operations
@@ -506,12 +586,19 @@ tofu output -var-file=infrastructure/environments/prod/terraform.tfvars
 
 ## 📚 Additional Resources
 
+### Quick Reference
+- **[Decisions Summary](./DECISIONS-SUMMARY.md)** - Quick answers to your architecture questions
+- **[Architectural Decisions Record](./docs/architectural-decisions.md)** - Detailed decision rationale and alternatives
+
 ### Existing Documentation
 - **Architecture:** `docs/architecture.md`
 - **Deployment:** `docs/deployment-guide.md`
 - **Secrets:** `docs/secrets-management.md`
 - **Monitoring:** `docs/monitoring-logging.md`
 - **Disaster Recovery:** `docs/disaster-recovery.md`
+- **Testing:** `docs/testing-and-validation.md`
+- **Cost Estimation:** `docs/cost-estimation.md`
+- **Best Practices:** `docs/best-practices.md`
 
 ### External Resources
 - [OpenTofu Documentation](https://opentofu.org/docs/)
@@ -570,4 +657,4 @@ tofu help                   # Show OpenTofu help
 
 **Start with:** `make help` to see all available commands
 
-**Next Steps:** Choose your environment (dev/staging/prod) and follow the workflow above
+**Next Steps:** Choose your environment (dev/sandbox/prod) and follow the workflow above
