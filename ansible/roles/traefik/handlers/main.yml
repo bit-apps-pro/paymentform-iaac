@@ -1,0 +1,8 @@
+---
+# Handlers for Traefik role
+
+- name: restart traefik
+  systemd:
+    name: traefik
+    state: restarted
+    daemon_reload: yes

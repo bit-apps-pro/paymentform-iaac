@@ -26,6 +26,19 @@ variable "environment" {
   type        = string
 }
 
+# Cloudflare configuration
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for DNS and Load Balancer management"
+  type        = string
+  sensitive   = true
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for paymentform.io"
+  type        = string
+  sensitive   = true
+}
+
 # Domain and subdomain configuration
 variable "domain_name" {
   description = "Root domain name for the application"
@@ -48,4 +61,16 @@ variable "renderer_subdomain" {
   description = "Renderer subdomain for multi-tenant forms (e.g., *.sandbox.paymentform.io)"
   type        = string
   default     = ""
+}
+
+variable "enable_ecr" {
+  description = "Enable provisioning of ECR repositories (for sandbox and prod)"
+  type        = bool
+  default     = false
+}
+
+variable "ecr_repositories" {
+  description = "List of ECR repository/service names to create for non-dev environments"
+  type        = list(string)
+  default     = ["backend", "client", "renderer", "admin"]
 }

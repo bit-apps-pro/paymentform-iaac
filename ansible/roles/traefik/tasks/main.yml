@@ -1,0 +1,97 @@
+---
+# Ansible role for installing and configuring Traefik on EC2 instances
+
+- name: Install required packages
+  apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+    state: present
+    update_cache: yes
+
+- name: Download Traefik binary
+  get_url:
+    url: "https://github.com/traefik/traefik/releases/download/v{{ traefik_version }}/traefik_v{{ traefik_version }}_linux_amd64.tar.gz"
+    dest: /tmp/traefik.tar.gz
+    mode: '0644'
+  vars:
+    traefik_version: "3.0.0"
+
+- name: Extract Traefik binary
+  unarchive:
+    src: /tmp/traefik.tar.gz
+    dest: /tmp/
+    remote_src: yes
+
+- name: Move Traefik binary to /usr/local/bin
+  copy:
+    src: /tmp/traefik
+    dest: /usr/local/bin/traefik
+    mode: '0755'
+    remote_src: yes
+
+- name: Create Traefik configuration directory
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/traefik
+    - /etc/traefik/dynamic
+    - /var/log/traefik
+
+- name: Create acme.json for Let's Encrypt certificates
+  file:
+    path: /etc/traefik/acme.json
+    state: touch
+    mode: '0600'
+
+- name: Copy Traefik static configuration
+  template:
+    src: traefik.yml.j2
+    dest: /etc/traefik/traefik.yml
+    mode: '0644'
+  notify: restart traefik
+
+- name: Copy Traefik dynamic configuration
+  template:
+    src: dynamic.yml.j2
+    dest: /etc/traefik/dynamic/dynamic.yml
+    mode: '0644'
+  notify: restart traefik
+
+- name: Copy Traefik systemd service file
+  copy:
+    src: traefik.service
+    dest: /etc/systemd/system/traefik.service
+    mode: '0644'
+  notify: restart traefik
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start Traefik service
+  systemd:
+    name: traefik
+    enabled: yes
+    state: started
+
+- name: Configure logrotate for Traefik logs
+  copy:
+    dest: /etc/logrotate.d/traefik
+    content: |
+      /var/log/traefik/*.log {
+        daily
+        rotate 14
+        compress
+        delaycompress
+        notifempty
+        create 0640 root root
+        sharedscripts
+        postrotate
+          systemctl reload traefik > /dev/null 2>&1 || true
+        endscript
+      }
+    mode: '0644'

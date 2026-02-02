@@ -314,4 +314,30 @@ install-tools:
 	@echo "  make test-complete"
 	@echo "  - Deploy to dev: make init ENV=dev && make plan ENV=dev && make apply ENV=dev"
 
+# Dev local targets
+dev-build:       ## Build images locally for dev
+	./scripts/build-local-dev.sh
+
+dev-up:          ## Start docker-compose with local images
+	docker-compose -f local/docker-compose.dev.yml up -d --build
+
+dev-down:        ## Stop local dev environment
+	docker-compose -f local/docker-compose.dev.yml down
+
+dev-local:       ## Build + Up in one command
+	./scripts/build-local-dev.sh && docker-compose -f local/docker-compose.dev.yml up -d --build
+
+# Sandbox/Prod targets
+build-local:     ## Build for any environment
+	@echo "Usage: make build-local ENV=<env>"; ./scripts/build-local.sh $(ENV)
+
+ecr-login:       ## Authenticate with ECR
+	@aws ecr get-login-password --region $(REGION) | docker login --username AWS --password-stdin $$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$(REGION).amazonaws.com || true
+
+push-to-ecr:     ## Push images to ECR
+	./scripts/push-to-ecr.sh --tag $(ENV)-$$(date +%Y%m%d%H%M%S) --region $(REGION)
+
+local-deploy:    ## Full workflow: build + push + deploy
+	./scripts/deploy-to-env.sh $(ENV)
+
 .DEFAULT_GOAL := help

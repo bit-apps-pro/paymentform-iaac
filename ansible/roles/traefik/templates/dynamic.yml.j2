@@ -1,0 +1,47 @@
+# Dynamic Configuration for Traefik
+# Define middlewares, routers, and services here
+
+http:
+  middlewares:
+    # Security Headers
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customResponseHeaders:
+          X-Robots-Tag: "none,noarchive,nosnippet,notranslate,noimageindex"
+          Server: ""
+    
+    # Rate Limiting
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1m
+    
+    # Compression
+    compression:
+      compress: {}
+    
+    # Basic Auth for Dashboard
+    dashboard-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$H8YJPLY8$N7zJJxp5Wjx2w3dlO4o4k/"
+  
+  routers:
+    # Dashboard Router
+    dashboard:
+      rule: "Host(`traefik.{{ domain_name }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      entryPoints:
+        - websecure
+      service: api@internal
+      middlewares:
+        - dashboard-auth
+        - security-headers
+      tls:
+        certResolver: cloudflare

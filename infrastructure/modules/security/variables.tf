@@ -37,3 +37,21 @@ variable "enable_strict_security" {
   type        = bool
   default     = false
 }
+
+variable "use_cloudflare" {
+  description = "Use Cloudflare-specific security rules (restrict to CF IPs only)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_ssh_access" {
+  description = "Enable SSH access to EC2 instances"
+  type        = bool
+  default     = true
+}
+
+variable "ssh_allowed_cidrs" {
+  description = "CIDR blocks allowed for SSH access"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}

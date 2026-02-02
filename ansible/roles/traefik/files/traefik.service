@@ -1,0 +1,30 @@
+[Unit]
+Description=Traefik Reverse Proxy
+Documentation=https://doc.traefik.io/traefik/
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/traefik --configFile=/etc/traefik/traefik.yml
+Restart=on-failure
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/traefik/acme.json
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+# Limits
+LimitNOFILE=1048576
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target

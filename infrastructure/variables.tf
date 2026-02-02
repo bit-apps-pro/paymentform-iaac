@@ -14,14 +14,59 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (dev, staging, prod)"
+  description = "Deployment environment (dev, sandbox, staging, prod)"
   type        = string
   nullable    = false
 
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, staging, prod."
+    condition     = contains(["dev", "sandbox", "staging", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, sandbox, staging, prod."
   }
+}
+
+variable "api_subdomain" {
+  description = "API subdomain for backend services (e.g., api.sandbox.paymentform.io)"
+  type        = string
+  default     = ""
+}
+
+variable "app_subdomain" {
+  description = "App subdomain for client dashboard (e.g., app.sandbox.paymentform.io)"
+  type        = string
+  default     = ""
+}
+
+variable "renderer_subdomain" {
+  description = "Renderer subdomain for multi-tenant forms (e.g., *.sandbox.paymentform.io)"
+  type        = string
+  default     = ""
+}
+
+variable "enable_ecr" {
+  description = "Enable provisioning of ECR repositories (for sandbox and prod)"
+  type        = bool
+  default     = false
+}
+
+variable "ecr_repositories" {
+  description = "List of ECR repository/service names to create for non-dev environments"
+  type        = list(string)
+  default     = ["backend", "client", "renderer", "admin"]
+}
+
+# Cloudflare configuration
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for DNS and Load Balancer management"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for paymentform.io"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "region" {
@@ -194,6 +239,61 @@ variable "turso_token_secret_arn" {
   type        = string
   default     = ""
   nullable    = false
+}
+
+# Cloudflare Load Balancer variables
+variable "enable_cloudflare_lb" {
+  description = "Enable Cloudflare Load Balancer"
+  type        = bool
+  default     = true
+}
+
+variable "api_origin_ips" {
+  description = "List of origin IPs for API backend"
+  type        = list(string)
+  default     = []
+}
+
+variable "app_origin_ips" {
+  description = "List of origin IPs for App frontend"
+  type        = list(string)
+  default     = []
+}
+
+variable "renderer_origin_ip" {
+  description = "Origin IP for renderer wildcard DNS record"
+  type        = string
+  default     = ""
+}
+
+variable "health_check_path" {
+  description = "Health check path for API"
+  type        = string
+  default     = "/health"
+}
+
+variable "notification_email" {
+  description = "Email for load balancer notifications"
+  type        = string
+  default     = ""
+}
+
+variable "enable_cloudflare_waf" {
+  description = "Enable Cloudflare Web Application Firewall"
+  type        = bool
+  default     = true
+}
+
+variable "enable_rate_limiting" {
+  description = "Enable rate limiting"
+  type        = bool
+  default     = true
+}
+
+variable "rate_limit_requests" {
+  description = "Number of requests allowed per minute"
+  type        = number
+  default     = 100
 }
 
 variable "enable_strict_security" {

@@ -52,3 +52,8 @@ output "encryption_key_alias" {
   description = "Alias of the KMS encryption key"
   value       = aws_kms_alias.encryption_key_alias.name
 }
+
+output "ec2_cloudflare_security_group_id" {
+  description = "ID of the EC2 security group for Cloudflare-only access"
+  value       = var.use_cloudflare ? aws_security_group.ec2_cloudflare[0].id : null
+}

@@ -97,3 +97,36 @@ module "turso_database" {
   environment     = var.environment
   standard_tags   = local.standard_tags
 }
+
+# Cloudflare DNS and Load Balancing module
+module "cloudflare" {
+  source = "./modules/cloudflare"
+  count  = var.cloudflare_zone_id != "" ? 1 : 0
+
+  cloudflare_zone_id    = var.cloudflare_zone_id
+  environment           = var.environment
+  api_subdomain         = var.api_subdomain
+  app_subdomain         = var.app_subdomain
+  renderer_subdomain    = var.renderer_subdomain
+  renderer_origin_ip    = var.renderer_origin_ip
+  enable_load_balancer  = var.enable_cloudflare_lb
+  api_origin_ips        = var.api_origin_ips
+  app_origin_ips        = var.app_origin_ips
+  health_check_path     = var.health_check_path
+  notification_email    = var.notification_email
+  enable_waf            = var.enable_cloudflare_waf
+  enable_rate_limiting  = var.enable_rate_limiting
+  rate_limit_requests   = var.rate_limit_requests
+  standard_tags         = local.standard_tags
+}
+
+# Optional ECR module for sandbox and prod environments
+module "ecr" {
+  source = "./modules/ecr"
+  count  = var.enable_ecr && contains(["sandbox", "prod"], var.environment) ? 1 : 0
+
+  environment    = var.environment
+  repositories   = var.ecr_repositories
+  name_prefix    = local.resource_prefix
+  standard_tags  = local.standard_tags
+}

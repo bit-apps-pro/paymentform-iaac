@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
     neon = {
       source  = "kislerdm/neon"
       version = "0.13.0"
@@ -22,12 +26,14 @@ terraform {
 
 # Import infrastructure configurations
 module "infrastructure" {
-  source           = "./infrastructure"
-  neon_api_key     = var.neon_api_key
-  turso_api_token  = var.turso_api_token
-  desired_capacity = var.desired_capacity
-  region           = var.region
-  environment      = var.environment
+  source               = "./infrastructure"
+  neon_api_key         = var.neon_api_key
+  turso_api_token      = var.turso_api_token
+  cloudflare_api_token = var.cloudflare_api_token
+  cloudflare_zone_id   = var.cloudflare_zone_id
+  desired_capacity     = var.desired_capacity
+  region               = var.region
+  environment          = var.environment
 }
 
 # Re-export all infrastructure outputs

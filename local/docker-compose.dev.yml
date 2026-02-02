@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  backend:
+    image: paymentform-backend:dev-local
+    build: ../backend
+    volumes:
+      - ../backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+    networks:
+      - paymentform-net
+
+  client:
+    image: paymentform-client:dev-local
+    build: ../client
+    volumes:
+      - ../client:/app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    networks:
+      - paymentform-net
+
+  renderer:
+    image: paymentform-renderer:dev-local
+    build: ../renderer
+    volumes:
+      - ../renderer:/app
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+    networks:
+      - paymentform-net
+
+  admin:
+    image: paymentform-admin:dev-local
+    build: ../admin
+    volumes:
+      - ../admin:/app
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+    networks:
+      - paymentform-net
+
+networks:
+  paymentform-net:
+    driver: bridge
