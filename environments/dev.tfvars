@@ -15,4 +15,4 @@ client_instance_type   = "t4g.micro"
 renderer_instance_type = "t4g.micro"
 
 # Databases are serverless, no instance type needed
-hxuA6P5UrRk4
+# (no additional tokens)
