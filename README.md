@@ -677,4 +677,4 @@ tofu help                   # Show OpenTofu help
 
 **Next Steps:** Choose your environment (dev/sandbox/prod) and follow the workflow above
 
-NOTE: 'staging' environment has been renamed to 'sandbox' to standardize environments (dev, sandbox, prod).
+NOTE: 'staging' environment has been renamed to 'sandbox' to standardize environments (dev, sandbox, prod). Historical references to 'staging' remain in logs and documentation for past deployments.

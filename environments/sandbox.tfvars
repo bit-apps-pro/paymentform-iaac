@@ -9,7 +9,7 @@ allow_origin_hosts = "*.sandbox.paymentform.io"
 # Turso database configuration (tenant databases)
 # Turso API token provided via TF_VAR_turso_api_token environment variable
 
-# Staging environment sizing - Graviton instances
+# Sandbox environment sizing - Graviton instances
 backend_instance_type  = "t4g.small"
 client_instance_type   = "t4g.small"
 renderer_instance_type = "t4g.small"

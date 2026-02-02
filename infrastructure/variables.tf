@@ -14,13 +14,13 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (dev, sandbox, sandbox, prod)"
+  description = "Deployment environment (dev, sandbox, prod)"
   type        = string
   nullable    = false
 
   validation {
-    condition     = contains(["dev", "sandbox", "sandbox", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, sandbox, sandbox, prod."
+    condition     = contains(["dev", "sandbox", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, sandbox, prod."
   }
 }
 
