@@ -207,3 +207,12 @@ resource "aws_autoscaling_policy" "scale_down" {
   cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.compute.name
 }
+# Data source to get instance IPs from ASG
+data "aws_instances" "compute" {
+  filter {
+    name   = "tag:aws:autoscaling:groupName"
+    values = [aws_autoscaling_group.compute.name]
+  }
+
+  depends_on = [aws_autoscaling_group.compute]
+}

@@ -15,30 +15,16 @@ module "networking" {
 }
 
 # Security module
+# Manages VPC security groups for EC2 instances
+# Traefik runs on EC2 and handles SSL/TLS (Cloudflare provides DNS)
 module "security" {
   source = "./modules/security"
 
-  environment             = var.environment
-  vpc_id                  = module.networking.vpc_id
-  app_ports               = var.app_ports
-  neon_api_key_secret_arn = var.neon_api_key_secret_arn
-  turso_token_secret_arn  = var.turso_token_secret_arn
-  enable_strict_security  = var.enable_strict_security
-  standard_tags           = local.standard_tags
-}
-
-# ALB module
-module "alb" {
-  source = "./modules/alb"
-
-  environment                = var.environment
-  vpc_id                     = module.networking.vpc_id
-  public_subnet_ids          = module.networking.public_subnet_ids
-  alb_security_group_id      = module.security.alb_security_group_id
-  ssl_certificate_arn        = var.ssl_certificate_arn
-  enable_deletion_protection = var.enable_deletion_protection
-  standard_tags              = local.standard_tags
-  enable_access_logs         = var.enable_alb_access_logs
+  environment            = var.environment
+  vpc_id                 = module.networking.vpc_id
+  app_ports              = var.app_ports
+  enable_strict_security = var.enable_strict_security
+  standard_tags          = local.standard_tags
 }
 
 # Storage module
@@ -99,7 +85,9 @@ module "turso_database" {
   standard_tags      = local.standard_tags
 }
 
-# Cloudflare DNS and Load Balancing module
+# Cloudflare DNS module
+# Routes traffic directly to EC2 instances via Traefik
+# Traefik handles SSL/TLS termination and reverse proxy
 module "cloudflare" {
   source = "./modules/cloudflare"
 
@@ -112,8 +100,8 @@ module "cloudflare" {
   renderer_subdomain    = var.renderer_subdomain
   renderer_origin_ip    = var.renderer_origin_ip
   enable_load_balancer  = var.enable_cloudflare_lb
-  api_origin_ips        = module.alb.alb_dns_name != "" ? [module.alb.alb_dns_name] : []
-  app_origin_ips        = module.alb.alb_dns_name != "" ? [module.alb.alb_dns_name] : []
+  api_origin_ips        = module.compute.instance_ips
+  app_origin_ips        = module.compute.instance_ips
   health_check_path     = var.health_check_path
   notification_email    = var.notification_email
   enable_waf            = var.enable_cloudflare_waf

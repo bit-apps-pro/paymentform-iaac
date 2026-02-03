@@ -52,3 +52,8 @@ output "autoscaling_group_desired_capacity" {
   description = "Desired capacity of the Auto Scaling Group"
   value       = aws_autoscaling_group.compute.desired_capacity
 }
+
+output "instance_ips" {
+  description = "List of EC2 instance public/private IP addresses"
+  value       = data.aws_instances.compute.public_ips != [] ? data.aws_instances.compute.public_ips : data.aws_instances.compute.private_ips
+}

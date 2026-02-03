@@ -7,88 +7,53 @@ terraform {
   }
 }
 
-# ALB Security Group - Allow HTTP/HTTPS from internet
-resource "aws_security_group" "alb" {
-  name_prefix = "${var.environment}-alb-sg"
+# EC2/Traefik Security Group - Allow HTTP/HTTPS from Cloudflare
+resource "aws_security_group" "ecs" {
+  name_prefix = "${var.environment}-ec2-sg"
   vpc_id      = var.vpc_id
 
   tags = merge(
     var.standard_tags,
     {
-      Name = "${var.environment}-alb-security-group"
+      Name = "${var.environment}-ec2-security-group"
     }
   )
 }
 
-# Inbound rules for ALB
-resource "aws_security_group_rule" "alb_ingress_http" {
+# Inbound rules for EC2 - allow HTTP/HTTPS from Cloudflare and application ports
+resource "aws_security_group_rule" "ecs_ingress_http" {
   type              = "ingress"
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTP from internet"
+  cidr_blocks       = ["0.0.0.0/0"] # Cloudflare proxies traffic
+  security_group_id = aws_security_group.ecs.id
+  description       = "Allow HTTP from Cloudflare"
 }
 
-resource "aws_security_group_rule" "alb_ingress_https" {
+resource "aws_security_group_rule" "ecs_ingress_https" {
   type              = "ingress"
   from_port         = 443
   to_port           = 443
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTPS from internet"
+  cidr_blocks       = ["0.0.0.0/0"] # Cloudflare proxies traffic
+  security_group_id = aws_security_group.ecs.id
+  description       = "Allow HTTPS from Cloudflare"
 }
 
-# Outbound rules for ALB
-resource "aws_security_group_rule" "alb_egress_all" {
-  type              = "egress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.alb.id
-  description       = "Allow all outbound traffic"
-}
-
-# ECS Security Group - Allow traffic from ALB
-resource "aws_security_group" "ecs" {
-  name_prefix = "${var.environment}-ecs-sg"
-  vpc_id      = var.vpc_id
-
-  tags = merge(
-    var.standard_tags,
-    {
-      Name = "${var.environment}-ecs-security-group"
-    }
-  )
-}
-
-# Inbound rules for ECS - allow from ALB
-resource "aws_security_group_rule" "ecs_ingress_from_alb" {
-  type                     = "ingress"
-  from_port                = 3000
-  to_port                  = 8000
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
-  security_group_id        = aws_security_group.ecs.id
-  description              = "Allow traffic from ALB to ECS containers"
-}
-
-# Additional inbound rule for application ports
+# Additional inbound rules for application ports
 resource "aws_security_group_rule" "ecs_ingress_app_ports" {
-  count                    = length(var.app_ports)
-  type                     = "ingress"
-  from_port                = var.app_ports[count.index]
-  to_port                  = var.app_ports[count.index]
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
-  security_group_id        = aws_security_group.ecs.id
-  description              = "Allow traffic on app port ${var.app_ports[count.index]}"
+  count             = length(var.app_ports) > 0 ? length(var.app_ports) : 0
+  type              = "ingress"
+  from_port         = var.app_ports[count.index]
+  to_port           = var.app_ports[count.index]
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.ecs.id
+  description       = "Allow traffic on app port ${var.app_ports[count.index]}"
 }
 
-# Outbound rules for ECS
+# Outbound rules for EC2/Traefik
 resource "aws_security_group_rule" "ecs_egress_all" {
   type              = "egress"
   from_port         = 0

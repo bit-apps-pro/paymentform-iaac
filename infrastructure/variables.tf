@@ -234,45 +234,13 @@ variable "enable_nat_gateway" {
 
 # Security variables
 variable "app_ports" {
-  description = "List of application ports to allow from ALB to ECS"
+  description = "List of application ports to allow to EC2 instances"
   type        = list(number)
-  default     = [3000, 8000]
-  nullable    = false
-}
-
-variable "neon_api_key_secret_arn" {
-  description = "ARN of the Neon API key secret in AWS Secrets Manager"
-  type        = string
-  default     = ""
-  nullable    = false
-}
-
-variable "turso_token_secret_arn" {
-  description = "ARN of the Turso token secret in AWS Secrets Manager"
-  type        = string
-  default     = ""
+  default     = [3000, 8000, 80, 443]
   nullable    = false
 }
 
 # Cloudflare Load Balancer variables
-variable "enable_cloudflare_lb" {
-  description = "Enable Cloudflare Load Balancer"
-  type        = bool
-  default     = true
-}
-
-variable "api_origin_ips" {
-  description = "List of origin IPs for API backend"
-  type        = list(string)
-  default     = []
-}
-
-variable "app_origin_ips" {
-  description = "List of origin IPs for App frontend"
-  type        = list(string)
-  default     = []
-}
-
 variable "renderer_origin_ip" {
   description = "Origin IP for renderer wildcard DNS record"
   type        = string
@@ -286,7 +254,7 @@ variable "health_check_path" {
 }
 
 variable "notification_email" {
-  description = "Email for load balancer notifications"
+  description = "Email for Cloudflare notifications"
   type        = string
   default     = ""
 }
@@ -309,32 +277,16 @@ variable "rate_limit_requests" {
   default     = 100
 }
 
+variable "enable_cloudflare_lb" {
+  description = "Enable Cloudflare Load Balancer"
+  type        = bool
+  default     = true
+}
+
 variable "enable_strict_security" {
   description = "Whether to enable strict security rules (production) or relaxed rules (development)"
   type        = bool
   default     = false
-  nullable    = false
-}
-
-# ALB variables
-variable "ssl_certificate_arn" {
-  description = "ARN of the SSL certificate for HTTPS listener"
-  type        = string
-  default     = ""
-  nullable    = false
-}
-
-variable "enable_deletion_protection" {
-  description = "Enable deletion protection for the ALB"
-  type        = bool
-  default     = false
-  nullable    = false
-}
-
-variable "enable_alb_access_logs" {
-  description = "Enable access logs for the ALB"
-  type        = bool
-  default     = true
   nullable    = false
 }
 
