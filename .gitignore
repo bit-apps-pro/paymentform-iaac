@@ -29,3 +29,5 @@ crash.*.log
 outputs.json
 *-outputs.json
 terraform.tfvars
+.envrc
+tofu.plan

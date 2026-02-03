@@ -69,6 +69,13 @@ variable "cloudflare_zone_id" {
   default     = ""
 }
 
+variable "cloudflare_account_id" {
+  description = "Cloudflare Account ID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "region" {
   description = "AWS region for deployment"
   type        = string
@@ -173,6 +180,12 @@ variable "turso_api_token" {
   description = "Turso API token for tenant database provisioning"
   type        = string
   sensitive   = true
+  nullable    = false
+}
+
+variable "turso_organization" {
+  description = "Turso organization name"
+  type        = string
   nullable    = false
 }
 
@@ -464,4 +477,78 @@ locals {
   is_prod    = var.environment == "prod"
   is_sandbox = var.environment == "sandbox"
   is_dev     = var.environment == "dev"
+}
+
+# AWS Amplify configuration
+variable "enable_amplify" {
+  description = "Enable AWS Amplify for renderer and client deployments"
+  type        = bool
+  default     = false
+}
+
+variable "renderer_repository_url" {
+  description = "Git repository URL for renderer application"
+  type        = string
+  default     = ""
+}
+
+variable "renderer_branch_name" {
+  description = "Branch name to deploy for renderer"
+  type        = string
+  default     = "main"
+}
+
+variable "renderer_env_vars" {
+  description = "Environment variables for renderer application"
+  type        = map(string)
+  default     = {}
+}
+
+variable "renderer_custom_domain" {
+  description = "Custom domain for renderer (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "renderer_subdomain_prefix" {
+  description = "Subdomain prefix for renderer"
+  type        = string
+  default     = ""
+}
+
+variable "client_repository_url" {
+  description = "Git repository URL for client application"
+  type        = string
+  default     = ""
+}
+
+variable "client_branch_name" {
+  description = "Branch name to deploy for client"
+  type        = string
+  default     = "main"
+}
+
+variable "client_env_vars" {
+  description = "Environment variables for client application"
+  type        = map(string)
+  default     = {}
+}
+
+variable "client_custom_domain" {
+  description = "Custom domain for client (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "client_subdomain_prefix" {
+  description = "Subdomain prefix for client"
+  type        = string
+  default     = ""
+}
+
+variable "amplify_access_token" {
+  description = "GitHub/GitLab personal access token for private repositories"
+  type        = string
+  sensitive   = true
+  default     = ""
 }

@@ -179,7 +179,7 @@ resource "aws_cloudwatch_log_group" "alb_access_logs" {
 # S3 bucket for storing ALB access logs (if enabled)
 resource "aws_s3_bucket" "alb_logs" {
   count  = var.enable_access_logs ? 1 : 0
-  bucket = "${var.environment}-alb-access-logs-${random_string.suffix.result}"
+  bucket = "${var.environment}-alb-access-logs-${random_string.suffix[0].result}"
 
   tags = merge(
     var.standard_tags,

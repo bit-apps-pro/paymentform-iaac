@@ -10,6 +10,7 @@
 
 ENV ?= dev
 REGION ?= us-east-1
+AWS_PROFILE ?= default
 
 # Fetch credentials from AWS Secrets Manager
 fetch-credentials:
@@ -91,21 +92,15 @@ help:
 
 init:
 	@echo "Initializing OpenTofu for $(ENV) environment..."
-	@export TF_VAR_neon_api_key=$$(aws secretsmanager get-secret-value --secret-id neon-api-key --query SecretString --output text 2>/dev/null || echo "$$TF_VAR_neon_api_key"); \
-	export TF_VAR_turso_api_token=$$(aws secretsmanager get-secret-value --secret-id turso-api-token --query SecretString --output text 2>/dev/null || echo "$$TF_VAR_turso_api_token"); \
-	tofu init -backend-config=infrastructure/environments/$(ENV)/backend.hcl
+	@tofu init -backend-config=infrastructure/environments/$(ENV)/backend.hcl
 
 plan:
 	@echo "Planning changes for $(ENV) environment..."
-	@export TF_VAR_neon_api_key=$$(aws secretsmanager get-secret-value --secret-id neon-api-key --query SecretString --output text 2>/dev/null || echo "$$TF_VAR_neon_api_key"); \
-	export TF_VAR_turso_api_token=$$(aws secretsmanager get-secret-value --secret-id turso-api-token --query SecretString --output text 2>/dev/null || echo "$$TF_VAR_turso_api_token"); \
-	tofu plan -var-file=infrastructure/environments/$(ENV)/terraform.tfvars -out=tfplan-$(ENV)
+	@tofu plan -var-file=infrastructure/environments/$(ENV)/terraform.tfvars -out=tfplan-$(ENV)
 
 apply:
 	@echo "Applying changes for $(ENV) environment..."
 	@if [ -f tfplan-$(ENV) ]; then \
-		export TF_VAR_neon_api_key=$$(aws secretsmanager get-secret-value --secret-id neon-api-key --query SecretString --output text 2>/dev/null || echo "$$TF_VAR_neon_api_key"); \
-		export TF_VAR_turso_api_token=$$(aws secretsmanager get-secret-value --secret-id turso-api-token --query SecretString --output text 2>/dev/null || echo "$$TF_VAR_turso_api_token"); \
 		tofu apply tfplan-$(ENV); \
 	else \
 		echo "Plan file not found. Run 'make plan ENV=$(ENV)' first."; \

@@ -36,7 +36,6 @@ resource "aws_internet_gateway" "main" {
 # Elastic IP for NAT Gateway
 resource "aws_eip" "nat_gateway" {
   domain = "vpc"
-  vpc_id = aws_vpc.main.id
 
   depends_on = [
     aws_internet_gateway.main

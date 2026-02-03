@@ -8,7 +8,8 @@ terraform {
 }
 
 provider "turso" {
-  api_token = var.turso_api_token
+  api_token    = var.turso_api_token
+  organization = var.turso_organization
 }
 
 # Create Turso organization (if not exists)
@@ -16,39 +17,18 @@ provider "turso" {
 
 # Create main tenant database
 resource "turso_database" "tenant" {
-  name       = "${var.resource_prefix}-tenants"
-  group      = var.turso_group
-  is_clone   = false
-  is_replica = false
-
-  tags = merge(
-    var.standard_tags,
-    { Component = "TenantDatabase" }
-  )
+  name  = "${var.resource_prefix}-tenants"
+  group = var.turso_group
 }
 
 # Create analytics database (for per-tenant analytics)
 resource "turso_database" "analytics" {
-  name       = "${var.resource_prefix}-analytics"
-  group      = var.turso_group
-  is_clone   = false
-  is_replica = false
-
-  tags = merge(
-    var.standard_tags,
-    { Component = "AnalyticsDatabase" }
-  )
+  name  = "${var.resource_prefix}-analytics"
+  group = var.turso_group
 }
 
 # Create backup database for disaster recovery
 resource "turso_database" "backup" {
-  name       = "${var.resource_prefix}-backup"
-  group      = var.turso_group
-  is_clone   = false
-  is_replica = false
-
-  tags = merge(
-    var.standard_tags,
-    { Component = "BackupDatabase" }
-  )
+  name  = "${var.resource_prefix}-backup"
+  group = var.turso_group
 }

@@ -3,78 +3,118 @@
   hosts: backend
   become: yes
   vars_files:
-    - ../vars/backend.yml
+    - ../vars/common.yml
+    - ../vars/{{ environment | default('dev') }}.yml
+  
   tasks:
-    - name: Ensure Docker is installed
-      package:
-        name: 
-          - docker
-          - docker-compose
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - python3-pip
+          - git
         state: present
-      notify: Start Docker
 
-    - name: Add ec2-user to docker group
-      user:
-        name: ec2-user
-        groups: docker
-        append: yes
-
-    - name: Create application directory
-      file:
-        path: "{{ app_directory }}"
-        state: directory
-        owner: ec2-user
-        group: docker
-        mode: '0755'
-
-    - name: Copy application files
-      copy:
-        src: "{{ item.src }}"
-        dest: "{{ item.dest }}"
-        owner: ec2-user
-        mode: "{{ item.mode | default('0644') }}"
-      loop:
-        - { src: 'backend/', dest: '{{ app_directory }}/backend', mode: '0755' }
-        - { src: 'docker-compose.backend.yml', dest: '{{ app_directory }}/docker-compose.yml' }
-
-    - name: Copy environment file
-      template:
-        src: backend.env.j2
-        dest: "{{ app_directory }}/backend/.env"
-        owner: ec2-user
-        mode: '0644'
-
-    - name: Login to ECR if configured
-      shell: aws ecr get-login-password --region "{{ (aws_region | default('us-east-1')) }}" | docker login --username AWS --password-stdin "{{ ecr_account_id }}.dkr.ecr.{{ (aws_region | default('us-east-1')) }}.amazonaws.com"
-      when: environment != "dev" and (ecr_account_id is defined)
-      ignore_errors: yes
-
-    - name: Pull latest Docker images
-      docker_compose:
-        project_src: "{{ app_directory }}"
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
         state: present
-        pull: yes
-      register: compose_result
 
-    - name: Start backend services
-      docker_compose:
-        project_src: "{{ app_directory }}"
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
-      register: compose_result
 
-    - name: Wait for backend to be ready
-      uri:
-        url: "http://localhost:{{ backend_port }}/health"
-        method: GET
-        status_code: 200
-      register: result
-      until: result.status == 200
-      retries: 30
-      delay: 10
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
 
-  handlers:
-    - name: Start Docker
+    - name: Start and enable Docker
       systemd:
         name: docker
         state: started
         enabled: yes
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Install Docker SDK for Python
+      pip:
+        name:
+          - docker
+          - docker-compose
+        state: present
+
+    - name: Create application directory
+      file:
+        path: "{{ app_base_directory }}"
+        state: directory
+        owner: ubuntu
+        group: docker
+        mode: '0755'
+
+    - name: Clone backend repository
+      git:
+        repo: "{{ backend_repo_url }}"
+        dest: "{{ app_base_directory }}/backend"
+        version: "{{ backend_branch | default('main') }}"
+        force: yes
+      when: backend_repo_url is defined
+
+    - name: Create environment file
+      template:
+        src: backend.env.j2
+        dest: "{{ app_base_directory }}/backend/.env"
+        owner: ubuntu
+        mode: '0600'
+      when: backend_env_vars is defined
+
+    - name: Login to ECR
+      shell: |
+        aws ecr get-login-password --region {{ aws_region }} | \
+        docker login --username AWS --password-stdin {{ ecr_registry_url }}
+      when: 
+        - environment != "dev"
+        - ecr_registry_url is defined
+      become_user: ubuntu
+
+    - name: Start backend with Docker Compose
+      community.docker.docker_compose:
+        project_src: "{{ app_base_directory }}/backend"
+        files:
+          - docker-compose.yml
+        pull: yes
+        state: present
+      become_user: ubuntu
+      environment:
+        COMPOSE_PROJECT_NAME: paymentform-backend
+
+    - name: Wait for backend health check
+      uri:
+        url: "http://localhost:{{ backend_port | default(3000) }}/health"
+        method: GET
+        status_code: 200
+      register: health_check
+      until: health_check.status == 200
+      retries: 30
+      delay: 10
+      ignore_errors: yes

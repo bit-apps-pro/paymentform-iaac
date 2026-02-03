@@ -29,8 +29,11 @@ resource "aws_launch_template" "compute" {
   }))
 
   key_name      = var.key_pair_name
-  monitoring    = var.detailed_monitoring
   ebs_optimized = var.ebs_optimized
+
+  monitoring {
+    enabled = var.detailed_monitoring
+  }
 
   tag_specifications {
     resource_type = "instance"

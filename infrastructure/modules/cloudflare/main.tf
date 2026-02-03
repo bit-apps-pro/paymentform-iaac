@@ -10,11 +10,16 @@ terraform {
   }
 }
 
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+}
+
+
 # DNS Record for API subdomain (proxied through Cloudflare)
 resource "cloudflare_record" "api" {
   zone_id = var.cloudflare_zone_id
   name    = var.api_subdomain
-  value   = "placeholder" # Will be updated by load balancer
+  content = "placeholder" # Will be updated by load balancer
   type    = "A"
   proxied = true
   ttl     = 1 # Automatic when proxied
@@ -25,7 +30,7 @@ resource "cloudflare_record" "api" {
 resource "cloudflare_record" "app" {
   zone_id = var.cloudflare_zone_id
   name    = var.app_subdomain
-  value   = "placeholder" # Will be updated by load balancer
+  content = "placeholder" # Will be updated by load balancer
   type    = "A"
   proxied = true
   ttl     = 1 # Automatic when proxied
@@ -36,7 +41,7 @@ resource "cloudflare_record" "app" {
 resource "cloudflare_record" "renderer_wildcard" {
   zone_id = var.cloudflare_zone_id
   name    = var.renderer_subdomain
-  value   = var.renderer_origin_ip
+  content = var.renderer_origin_ip
   type    = "A"
   proxied = false # DNS-only for wildcard
   ttl     = 300
@@ -47,6 +52,7 @@ resource "cloudflare_record" "renderer_wildcard" {
 resource "cloudflare_load_balancer_monitor" "api_monitor" {
   count = var.enable_load_balancer ? 1 : 0
 
+  account_id       = var.cloudflare_account_id
   type             = "https"
   description      = "API health check"
   method           = "GET"
@@ -65,6 +71,7 @@ resource "cloudflare_load_balancer_monitor" "api_monitor" {
 resource "cloudflare_load_balancer_monitor" "app_monitor" {
   count = var.enable_load_balancer ? 1 : 0
 
+  account_id       = var.cloudflare_account_id
   type             = "https"
   description      = "App health check"
   method           = "GET"
@@ -83,6 +90,7 @@ resource "cloudflare_load_balancer_monitor" "app_monitor" {
 resource "cloudflare_load_balancer_pool" "api_pool" {
   count = var.enable_load_balancer ? 1 : 0
 
+  account_id  = var.cloudflare_account_id
   name        = "${var.environment}-api-pool"
   description = "API backend pool for ${var.environment}"
   enabled     = true
@@ -105,6 +113,7 @@ resource "cloudflare_load_balancer_pool" "api_pool" {
 resource "cloudflare_load_balancer_pool" "app_pool" {
   count = var.enable_load_balancer ? 1 : 0
 
+  account_id  = var.cloudflare_account_id
   name        = "${var.environment}-app-pool"
   description = "App frontend pool for ${var.environment}"
   enabled     = true

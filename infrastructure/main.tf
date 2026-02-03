@@ -91,33 +91,35 @@ module "neon_database" {
 module "turso_database" {
   source = "./modules/turso"
 
-  turso_api_token = var.turso_api_token
-  turso_group     = var.turso_group
-  resource_prefix = local.resource_prefix
-  environment     = var.environment
-  standard_tags   = local.standard_tags
+  turso_api_token    = var.turso_api_token
+  turso_organization = var.turso_organization
+  turso_group        = var.turso_group
+  resource_prefix    = local.resource_prefix
+  environment        = var.environment
+  standard_tags      = local.standard_tags
 }
 
 # Cloudflare DNS and Load Balancing module
 module "cloudflare" {
   source = "./modules/cloudflare"
-  count  = var.cloudflare_zone_id != "" ? 1 : 0
 
-  cloudflare_zone_id   = var.cloudflare_zone_id
-  environment          = var.environment
-  api_subdomain        = var.api_subdomain
-  app_subdomain        = var.app_subdomain
-  renderer_subdomain   = var.renderer_subdomain
-  renderer_origin_ip   = var.renderer_origin_ip
-  enable_load_balancer = var.enable_cloudflare_lb
-  api_origin_ips       = var.api_origin_ips
-  app_origin_ips       = var.app_origin_ips
-  health_check_path    = var.health_check_path
-  notification_email   = var.notification_email
-  enable_waf           = var.enable_cloudflare_waf
-  enable_rate_limiting = var.enable_rate_limiting
-  rate_limit_requests  = var.rate_limit_requests
-  standard_tags        = local.standard_tags
+  cloudflare_zone_id    = var.cloudflare_zone_id
+  cloudflare_api_token  = var.cloudflare_api_token
+  cloudflare_account_id = var.cloudflare_account_id
+  environment           = var.environment
+  api_subdomain         = var.api_subdomain
+  app_subdomain         = var.app_subdomain
+  renderer_subdomain    = var.renderer_subdomain
+  renderer_origin_ip    = var.renderer_origin_ip
+  enable_load_balancer  = var.enable_cloudflare_lb
+  api_origin_ips        = module.alb.alb_dns_name != "" ? [module.alb.alb_dns_name] : []
+  app_origin_ips        = module.alb.alb_dns_name != "" ? [module.alb.alb_dns_name] : []
+  health_check_path     = var.health_check_path
+  notification_email    = var.notification_email
+  enable_waf            = var.enable_cloudflare_waf
+  enable_rate_limiting  = var.enable_rate_limiting
+  rate_limit_requests   = var.rate_limit_requests
+  standard_tags         = local.standard_tags
 }
 
 # Optional ECR module for sandbox and prod environments
@@ -137,4 +139,28 @@ resource "aws_iam_role_policy_attachment" "compute_instance_ecr_pull" {
   role       = module.compute.instance_role_name
   policy_arn = module.ecr[0].ecr_pull_policy_arn
   depends_on = [module.ecr, module.compute]
+}
+
+# AWS Amplify module for renderer and client deployments
+module "amplify" {
+  source = "./modules/amplify"
+  count  = var.enable_amplify ? 1 : 0
+
+  resource_prefix             = local.resource_prefix
+  environment                 = var.environment
+  standard_tags               = local.standard_tags
+  renderer_repository_url     = var.renderer_repository_url
+  renderer_branch_name        = var.renderer_branch_name
+  renderer_env_vars           = var.renderer_env_vars
+  renderer_custom_domain      = var.renderer_custom_domain
+  renderer_subdomain_prefix   = var.renderer_subdomain_prefix
+  client_repository_url       = var.client_repository_url
+  client_branch_name          = var.client_branch_name
+  client_env_vars             = var.client_env_vars
+  client_custom_domain        = var.client_custom_domain
+  client_subdomain_prefix     = var.client_subdomain_prefix
+  access_token                = var.amplify_access_token
+  enable_auto_branch_creation = false
+  enable_branch_auto_build    = true
+  enable_branch_auto_deletion = false
 }

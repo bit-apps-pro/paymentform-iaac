@@ -1,0 +1,30 @@
+---
+# Backend service variables
+
+backend_port: 3000
+backend_repo_url: "https://github.com/your-org/backend.git"
+backend_branch: "main"
+
+# Docker configuration
+backend_image: "paymentform/backend"
+backend_container_name: "paymentform-backend"
+
+# Health check
+backend_health_endpoint: "/health"
+backend_health_timeout: 300
+
+# AWS ECR (for sandbox/prod)
+ecr_registry_url: "{{ ecr_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com"
+
+# Database connection strings (override from Terraform outputs)
+neon_connection_string: "{{ lookup('env', 'TF_OUTPUT_NEON_CONNECTION_STRING') | default('') }}"
+turso_tenant_url: "{{ lookup('env', 'TF_OUTPUT_TURSO_TENANT_URL') | default('') }}"
+turso_analytics_url: "{{ lookup('env', 'TF_OUTPUT_TURSO_ANALYTICS_URL') | default('') }}"
+
+# Domain configuration
+api_subdomain: "{{ lookup('env', 'TF_OUTPUT_API_SUBDOMAIN') | default('api.' + domain_name) }}"
+app_subdomain: "{{ lookup('env', 'TF_OUTPUT_APP_SUBDOMAIN') | default('app.' + domain_name) }}"
+renderer_subdomain: "{{ lookup('env', 'TF_OUTPUT_RENDERER_SUBDOMAIN') | default('*.' + domain_name) }}"
+
+# Security
+jwt_secret: "{{ lookup('env', 'JWT_SECRET') | default('') }}"

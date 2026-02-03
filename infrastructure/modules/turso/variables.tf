@@ -5,6 +5,12 @@ variable "turso_api_token" {
   nullable    = false
 }
 
+variable "turso_organization" {
+  description = "Turso organization name"
+  type        = string
+  nullable    = false
+}
+
 variable "turso_group" {
   description = "Turso database group/organization"
   type        = string

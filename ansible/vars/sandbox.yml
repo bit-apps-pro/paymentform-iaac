@@ -9,8 +9,6 @@ log_retention_days: 14
 # Services
 services:
   - backend
-  - client
-  - renderer
 
 # Resource limits for sandbox
 docker_memory_limit: "2g"

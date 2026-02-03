@@ -5,7 +5,7 @@ output "project_id" {
 
 output "database_host" {
   description = "Neon database host"
-  value       = neon_project.main.host
+  value       = "${neon_project.main.id}.aws.neon.tech"
 }
 
 output "database_name" {
@@ -25,6 +25,6 @@ output "readonly_role_name" {
 
 output "connection_string" {
   description = "Neon connection string template (replace <password>)"
-  value       = "postgresql://${neon_role.app.name}:<password>@${neon_project.main.host}/${neon_database.app.name}?sslmode=require"
+  value       = "postgresql://${neon_role.app.name}:<password>@${neon_project.main.id}.aws.neon.tech/${neon_database.app.name}?sslmode=require"
   sensitive   = true
 }

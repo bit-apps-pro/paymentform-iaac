@@ -5,6 +5,15 @@ variable "cloudflare_zone_id" {
   type        = string
 }
 
+variable "cloudflare_account_id" {
+  description = "Cloudflare Account ID"
+  type        = string
+}
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for DNS and Load Balancer management"
+  type        = string
+}
+
 variable "environment" {
   description = "Environment name (sandbox, prod)"
   type        = string

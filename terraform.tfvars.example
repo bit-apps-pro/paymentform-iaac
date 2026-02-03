@@ -54,6 +54,35 @@ enable_ecr          = false    # Set to true for sandbox/prod
 # cloudflare_zone_id   = "YOUR_ZONE_ID"
 
 # ----------------------------------------------------------------------------
+# AWS Amplify Configuration (Optional)
+# ----------------------------------------------------------------------------
+# Enable Amplify for renderer and client deployments
+# enable_amplify = false
+
+# Renderer Configuration
+# renderer_repository_url      = "https://github.com/your-org/renderer"
+# renderer_branch_name         = "main"
+# renderer_custom_domain       = "renderer.yourdomain.com"
+# renderer_subdomain_prefix    = ""  # Leave empty for root domain
+# renderer_env_vars = {
+#   NEXT_PUBLIC_API_URL = "https://api.yourdomain.com"
+#   NODE_ENV            = "production"
+# }
+
+# Client Configuration
+# client_repository_url      = "https://github.com/your-org/client"
+# client_branch_name         = "main"
+# client_custom_domain       = "app.yourdomain.com"
+# client_subdomain_prefix    = ""  # Leave empty for root domain
+# client_env_vars = {
+#   NEXT_PUBLIC_API_URL = "https://api.yourdomain.com"
+#   NODE_ENV            = "production"
+# }
+
+# Access token for private repositories
+# amplify_access_token = "ghp_xxxxxxxxxxxx"  # GitHub personal access token
+
+# ----------------------------------------------------------------------------
 # Monitoring & Backup
 # ----------------------------------------------------------------------------
 enable_monitoring               = true

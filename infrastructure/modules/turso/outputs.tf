@@ -5,7 +5,7 @@ output "tenant_db_name" {
 
 output "tenant_db_url" {
   description = "Turso tenant database connection URL"
-  value       = turso_database.tenant.connection_string
+  value       = "libsql://${turso_database.tenant.name}-${var.turso_organization}.turso.io"
   sensitive   = true
 }
 
@@ -16,7 +16,7 @@ output "analytics_db_name" {
 
 output "analytics_db_url" {
   description = "Turso analytics database connection URL"
-  value       = turso_database.analytics.connection_string
+  value       = "libsql://${turso_database.analytics.name}-${var.turso_organization}.turso.io"
   sensitive   = true
 }
 
@@ -27,6 +27,6 @@ output "backup_db_name" {
 
 output "backup_db_url" {
   description = "Turso backup database connection URL"
-  value       = turso_database.backup.connection_string
+  value       = "libsql://${turso_database.backup.name}-${var.turso_organization}.turso.io"
   sensitive   = true
 }

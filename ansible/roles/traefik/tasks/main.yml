@@ -1,5 +1,10 @@
 ---
-# Ansible role for installing and configuring Traefik on EC2 instances
+# Ansible role for installing and configuring Traefik on Ubuntu instances
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
 
 - name: Install required packages
   apt:
@@ -8,7 +13,6 @@
       - ca-certificates
       - gnupg
     state: present
-    update_cache: yes
 
 - name: Download Traefik binary
   get_url:

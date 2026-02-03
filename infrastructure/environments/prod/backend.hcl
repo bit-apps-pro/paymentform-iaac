@@ -7,9 +7,6 @@ region         = "us-east-1"
 dynamodb_table = "paymentform-terraform-lock"
 encrypt        = true
 
-# State versioning for disaster recovery
-versioning = true
-
 # Credential validation
 skip_credentials_validation = false
 skip_requesting_account_id  = false

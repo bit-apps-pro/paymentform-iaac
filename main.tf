@@ -22,18 +22,24 @@ terraform {
       version = "0.2.3"
     }
   }
+
+  # S3 backend configuration
+  # Use -backend-config to specify environment-specific values
+  backend "s3" {}
 }
 
 # Import infrastructure configurations
 module "infrastructure" {
-  source               = "./infrastructure"
-  neon_api_key         = var.neon_api_key
-  turso_api_token      = var.turso_api_token
-  cloudflare_api_token = var.cloudflare_api_token
-  cloudflare_zone_id   = var.cloudflare_zone_id
-  desired_capacity     = var.desired_capacity
-  region               = var.region
-  environment          = var.environment
+  source                = "./infrastructure"
+  neon_api_key          = var.neon_api_key
+  turso_api_token       = var.turso_api_token
+  turso_organization    = var.turso_organization
+  cloudflare_api_token  = var.cloudflare_api_token
+  cloudflare_zone_id    = var.cloudflare_zone_id
+  cloudflare_account_id = var.cloudflare_account_id
+  desired_capacity      = var.desired_capacity
+  region                = var.region
+  environment           = var.environment
 }
 
 # Re-export all infrastructure outputs

@@ -86,3 +86,44 @@ output "backup_db_name" {
   description = "Turso backup database name"
   value       = module.turso_database.backup_db_name
 }
+
+# Amplify Outputs
+output "renderer_app_id" {
+  description = "Amplify app ID for renderer"
+  value       = var.enable_amplify ? module.amplify[0].renderer_app_id : null
+}
+
+output "renderer_default_domain" {
+  description = "Default Amplify domain for renderer"
+  value       = var.enable_amplify ? module.amplify[0].renderer_default_domain : null
+}
+
+output "renderer_branch_url" {
+  description = "URL for renderer branch"
+  value       = var.enable_amplify ? module.amplify[0].renderer_branch_url : null
+}
+
+output "renderer_custom_domain_url" {
+  description = "Custom domain URL for renderer (if configured)"
+  value       = var.enable_amplify ? module.amplify[0].renderer_custom_domain_url : null
+}
+
+output "client_app_id" {
+  description = "Amplify app ID for client"
+  value       = var.enable_amplify ? module.amplify[0].client_app_id : null
+}
+
+output "client_default_domain" {
+  description = "Default Amplify domain for client"
+  value       = var.enable_amplify ? module.amplify[0].client_default_domain : null
+}
+
+output "client_branch_url" {
+  description = "URL for client branch"
+  value       = var.enable_amplify ? module.amplify[0].client_branch_url : null
+}
+
+output "client_custom_domain_url" {
+  description = "Custom domain URL for client (if configured)"
+  value       = var.enable_amplify ? module.amplify[0].client_custom_domain_url : null
+}
