@@ -24,3 +24,13 @@ output "rate_limiting_ruleset_id" {
   description = "Rate limiting ruleset ID"
   value       = var.enable_rate_limiting ? cloudflare_ruleset.rate_limiting[0].id : null
 }
+
+output "tenants_kv_namespace_id" {
+  description = "Cloudflare KV namespace ID for tenant storage"
+  value       = var.environment != "dev" ? cloudflare_workers_kv_namespace.tenants[0].id : "local-dev-namespace"
+}
+
+output "tenants_kv_namespace_title" {
+  description = "Cloudflare KV namespace title"
+  value       = var.environment != "dev" ? cloudflare_workers_kv_namespace.tenants[0].title : "local-dev-namespace"
+}

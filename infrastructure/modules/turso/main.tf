@@ -7,10 +7,7 @@ terraform {
   }
 }
 
-provider "turso" {
-  api_token    = var.turso_api_token
-  organization = var.turso_organization
-}
+
 
 # Create Turso organization (if not exists)
 # Turso uses organizations for grouping databases

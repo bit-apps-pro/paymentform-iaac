@@ -60,6 +60,7 @@ module "compute" {
   root_volume_type           = var.root_volume_type
   ecs_cluster_name           = var.ecs_cluster_name
   ecs_security_group_id      = module.security.ecs_security_group_id
+  region                     = var.region
 }
 
 # Neon database module
@@ -75,14 +76,41 @@ module "neon_database" {
 
 # Turso database module
 module "turso_database" {
-  source = "./modules/turso"
+  source = "./modules/turso-self-managed"
 
   turso_api_token    = var.turso_api_token
+  turso_auth_token   = var.turso_auth_token
   turso_organization = var.turso_organization
   turso_group        = var.turso_group
   resource_prefix    = local.resource_prefix
   environment        = var.environment
+  region             = var.region
   standard_tags      = local.standard_tags
+}
+
+# SSM module to provision application secrets as SecureString parameters
+module "ssm" {
+  source = "./modules/ssm"
+
+  environment      = var.environment
+  app_key          = var.app_key
+  redis_password   = var.redis_password
+  turso_auth_token = var.turso_auth_token
+  turso_api_token  = var.turso_api_token
+  kms_key_id       = var.kms_key_id
+
+  db_password                   = var.db_password
+  pgadmin_default_password      = var.pgadmin_default_password
+  tenant_db_auth_token          = var.tenant_db_auth_token
+  tenant_db_encryption_key      = var.tenant_db_encryption_key
+  mail_password                 = var.mail_password
+  aws_access_key_id             = var.aws_access_key_id
+  aws_secret_access_key         = var.aws_secret_access_key
+  google_client_secret          = var.google_client_secret
+  stripe_secret                 = var.stripe_secret
+  stripe_client_id              = var.stripe_client_id
+  stripe_connect_webhook_secret = var.stripe_connect_webhook_secret
+  kv_store_api_token            = var.kv_store_api_token
 }
 
 # Cloudflare DNS module

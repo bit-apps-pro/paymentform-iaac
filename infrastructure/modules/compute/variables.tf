@@ -110,3 +110,9 @@ variable "ecr_region" {
   type        = string
   default     = "us-east-1"
 }
+
+variable "region" {
+  description = "AWS region used by the compute module"
+  type        = string
+  nullable    = false
+}

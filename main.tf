@@ -124,3 +124,13 @@ output "backup_db_name" {
   description = "Turso backup database name"
   value       = module.infrastructure.backup_db_name
 }
+
+output "tenants_kv_namespace_id" {
+  description = "Cloudflare KV namespace ID for tenant storage"
+  value       = module.infrastructure.tenants_kv_namespace_id
+}
+
+output "tenants_kv_namespace_title" {
+  description = "Cloudflare KV namespace title"
+  value       = module.infrastructure.tenants_kv_namespace_title
+}

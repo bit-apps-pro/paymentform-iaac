@@ -1,7 +1,24 @@
 export TF_VAR_neon_api_key=$NEON_API_KEY
 export TF_VAR_turso_api_token=$TURSO_API_KEY
+export TF_VAR_turso_auth_token=$TURSO_AUTH_TOKEN
 export TF_VAR_turso_organization=$TURSO_ORGANIZATION
 export TF_VAR_amplify_access_token=$GITHUB_PERSONAL_ACCESS_TOKEN
 export TF_VAR_cloudflare_api_token="$CF_API_KEY"
 export TF_VAR_cloudflare_zone_id="$CF_ZONE_ID"
 export TF_VAR_cloudflare_account_id="$CF_ACCOUNT_ID"
+# Optional secrets stored in SSM (can be provided as TF vars during bootstrap)
+# export TF_VAR_app_key=$APP_KEY
+# export TF_VAR_redis_password=$REDIS_PASSWORD
+# Additional backend secrets (set during bootstrap or provide via TF_VAR)
+# export TF_VAR_db_password="your-db-password-here"           # DB_PASSWORD (Postgres)
+# export TF_VAR_pgadmin_default_password="your-pgadmin-pass" # PGADMIN_DEFAULT_PASSWORD
+# export TF_VAR_tenant_db_auth_token="your-tenant-jwt"      # TENANT_DB_AUTH_TOKEN
+# export TF_VAR_tenant_db_encryption_key="your-encryption-key" # TENANT_DB_ENCRYPTION_KEY
+# export TF_VAR_mail_password="your-smtp-password"          # MAIL_PASSWORD
+# export TF_VAR_aws_access_key_id="your-aws-access-key-id"  # AWS_ACCESS_KEY_ID
+# export TF_VAR_aws_secret_access_key="your-aws-secret-key" # AWS_SECRET_ACCESS_KEY
+# export TF_VAR_google_client_secret="your-google-secret"   # GOOGLE_CLIENT_SECRET
+# export TF_VAR_stripe_secret="your-stripe-secret"          # STRIPE_SECRET
+# export TF_VAR_stripe_client_id="your-stripe-client-id"    # STRIPE_CLIENT_ID
+# export TF_VAR_stripe_connect_webhook_secret="your-webhook-secret" # STRIPE_CONNECT_WEBHOOK_SECRET
+# export TF_VAR_kv_store_api_token="your-kv-store-token"    # KV_STORE_API_TOKEN

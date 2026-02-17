@@ -53,11 +53,10 @@ output "neon_connection_string" {
   sensitive   = true
 }
 
-# Turso Outputs
-output "tenant_db_url" {
-  description = "Turso tenant database connection URL"
-  value       = module.turso_database.tenant_db_url
-  sensitive   = true
+# Turso Outputs (SSM parameter paths only; secrets are NOT exposed)
+output "tenant_db_ssm_path" {
+  description = "SSM parameter path for tenant DB URL"
+  value       = module.turso_database.tenant_db_ssm_path
 }
 
 output "tenant_db_name" {
@@ -65,10 +64,9 @@ output "tenant_db_name" {
   value       = module.turso_database.tenant_db_name
 }
 
-output "analytics_db_url" {
-  description = "Turso analytics database connection URL"
-  value       = module.turso_database.analytics_db_url
-  sensitive   = true
+output "analytics_db_ssm_path" {
+  description = "SSM parameter path for analytics DB URL"
+  value       = module.turso_database.analytics_db_ssm_path
 }
 
 output "analytics_db_name" {
@@ -76,10 +74,9 @@ output "analytics_db_name" {
   value       = module.turso_database.analytics_db_name
 }
 
-output "backup_db_url" {
-  description = "Turso backup database connection URL"
-  value       = module.turso_database.backup_db_url
-  sensitive   = true
+output "backup_db_ssm_path" {
+  description = "SSM parameter path for backup DB URL"
+  value       = module.turso_database.backup_db_ssm_path
 }
 
 output "backup_db_name" {
@@ -126,4 +123,15 @@ output "client_branch_url" {
 output "client_custom_domain_url" {
   description = "Custom domain URL for client (if configured)"
   value       = var.enable_amplify ? module.amplify[0].client_custom_domain_url : null
+}
+
+# Cloudflare KV Outputs
+output "tenants_kv_namespace_id" {
+  description = "Cloudflare KV namespace ID for tenant storage"
+  value       = module.cloudflare.tenants_kv_namespace_id
+}
+
+output "tenants_kv_namespace_title" {
+  description = "Cloudflare KV namespace title"
+  value       = module.cloudflare.tenants_kv_namespace_title
 }

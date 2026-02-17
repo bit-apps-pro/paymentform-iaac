@@ -50,8 +50,11 @@ enable_ecr          = false    # Set to true for sandbox/prod
 # ----------------------------------------------------------------------------
 # Cloudflare Configuration (Optional)
 # ----------------------------------------------------------------------------
-# cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN"  # For DNS/CDN management
-# cloudflare_zone_id   = "YOUR_ZONE_ID"
+# Cloudflare API token (Account-level, not zone-level)
+# Required permissions: Workers KV Storage: Edit, Workers Scripts: Edit, Account Settings: Read
+# cloudflare_api_token  = "YOUR_CLOUDFLARE_API_TOKEN"  # For DNS/CDN/KV management
+# cloudflare_zone_id    = "YOUR_ZONE_ID"
+# cloudflare_account_id = "YOUR_ACCOUNT_ID"
 
 # ----------------------------------------------------------------------------
 # AWS Amplify Configuration (Optional)

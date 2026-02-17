@@ -150,6 +150,33 @@ resource "aws_iam_role_policy_attachment" "ssm_instance_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Minimal custom IAM policy to allow reading SSM parameters for the backend
+resource "aws_iam_policy" "ssm_get_parameters" {
+  name        = "${var.environment}-ssm-get-parameters"
+  description = "Allow reading specific SSM parameters for backend services"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:ssm:${var.region}:*:parameter/app/${var.environment}/backend/*"
+      }
+    ]
+  })
+}
+
+# Attach the custom SSM read policy to the ECS instance role
+resource "aws_iam_role_policy_attachment" "ssm_get_parameters_attachment" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = aws_iam_policy.ssm_get_parameters.arn
+}
+
 # CloudWatch Alarm for CPU utilization
 resource "aws_cloudwatch_metric_alarm" "cpu_utilization_high" {
   alarm_name          = "${var.environment}-compute-cpu-high"

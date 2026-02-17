@@ -183,6 +183,13 @@ variable "turso_api_token" {
   nullable    = false
 }
 
+variable "turso_auth_token" {
+  description = "Turso auth token for CLI operations (stored in SSM by module)"
+  type        = string
+  sensitive   = true
+  nullable    = false
+}
+
 variable "turso_organization" {
   description = "Turso organization name"
   type        = string
@@ -194,6 +201,99 @@ variable "turso_group" {
   type        = string
   default     = "default"
   nullable    = false
+}
+
+variable "app_key" {
+  description = "Application APP_KEY (Laravel). Will be stored in SSM by ssm module."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "redis_password" {
+  description = "Redis password for cache/queue. Will be stored in SSM by ssm module."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# Additional backend secrets from backend/.env.example
+variable "db_password" {
+  description = "PostgreSQL DB password for the backend (DB_PASSWORD)"
+  type        = string
+  sensitive   = true
+}
+
+variable "pgadmin_default_password" {
+  description = "Default password for pgAdmin (PGADMIN_DEFAULT_PASSWORD)"
+  type        = string
+  sensitive   = true
+}
+
+variable "tenant_db_auth_token" {
+  description = "Tenant database JWT auth token (TENANT_DB_AUTH_TOKEN)"
+  type        = string
+  sensitive   = true
+}
+
+variable "tenant_db_encryption_key" {
+  description = "LibSQL / tenant DB encryption key (TENANT_DB_ENCRYPTION_KEY)"
+  type        = string
+  sensitive   = true
+}
+
+variable "mail_password" {
+  description = "SMTP mail password for application email delivery (MAIL_PASSWORD)"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_access_key_id" {
+  description = "AWS access key ID used by backend services (AWS_ACCESS_KEY_ID)"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_secret_access_key" {
+  description = "AWS secret access key used by backend services (AWS_SECRET_ACCESS_KEY)"
+  type        = string
+  sensitive   = true
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth client secret (GOOGLE_CLIENT_SECRET)"
+  type        = string
+  sensitive   = true
+}
+
+variable "stripe_secret" {
+  description = "Stripe secret key for payments (STRIPE_SECRET)"
+  type        = string
+  sensitive   = true
+}
+
+variable "stripe_client_id" {
+  description = "Stripe client ID for Connect (STRIPE_CLIENT_ID)"
+  type        = string
+  sensitive   = true
+}
+
+variable "stripe_connect_webhook_secret" {
+  description = "Stripe Connect webhook signing secret (STRIPE_CONNECT_WEBHOOK_SECRET)"
+  type        = string
+  sensitive   = true
+}
+
+variable "kv_store_api_token" {
+  description = "API token for the KV store service (KV_STORE_API_TOKEN)"
+  type        = string
+  sensitive   = true
+}
+
+variable "kms_key_id" {
+  description = "Optional KMS key ARN used for encrypting SSM SecureString parameters"
+  type        = string
+  default     = ""
 }
 
 # Networking variables
