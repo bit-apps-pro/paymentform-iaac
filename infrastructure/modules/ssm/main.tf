@@ -1,3 +1,13 @@
+resource "aws_ssm_parameter" "neon_database_url" {
+  count       = var.neon_database_url != "" ? 1 : 0
+  name        = "/app/${var.environment}/backend/DATABASE_URL"
+  description = "Neon PostgreSQL connection string"
+  type        = "SecureString"
+  value       = var.neon_database_url
+  overwrite   = true
+  key_id      = var.kms_key_id
+}
+
 resource "aws_ssm_parameter" "app_key" {
   name        = "/app/${var.environment}/backend/APP_KEY"
   description = "Laravel APP_KEY for backend"
@@ -26,6 +36,7 @@ resource "aws_ssm_parameter" "turso_auth_token" {
 }
 
 resource "aws_ssm_parameter" "turso_api_token" {
+  count       = var.turso_api_token != "" ? 1 : 0
   name        = "/app/${var.environment}/backend/TURSO_API_TOKEN"
   description = "Turso API token"
   type        = "SecureString"

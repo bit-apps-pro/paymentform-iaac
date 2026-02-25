@@ -25,7 +25,7 @@ output "internet_gateway_id" {
 
 output "nat_gateway_id" {
   description = "ID of the NAT gateway"
-  value       = var.enable_nat_gateway ? aws_nat_gateway.main.id : null
+  value       = var.enable_nat_gateway ? aws_nat_gateway.main[0].id : null
 }
 
 output "public_route_table_id" {

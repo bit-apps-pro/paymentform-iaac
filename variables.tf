@@ -7,23 +7,17 @@ variable "project_name" {
   default     = "paymentform"
 }
 
-variable "neon_api_key" {
-  description = "Neon API key for serverless database provisioning"
+variable "neon_database_url" {
+  description = "Pre-created Neon PostgreSQL connection string (DATABASE_URL)"
   type        = string
   sensitive   = true
   default     = ""
 }
 
 variable "turso_api_token" {
-  description = "Turso API token for tenant database provisioning"
+  description = "Turso API token (used by backend for DB management)"
   type        = string
   sensitive   = true
-  default     = ""
-}
-
-variable "turso_organization" {
-  description = "Turso organization name"
-  type        = string
   default     = ""
 }
 
@@ -132,29 +126,6 @@ variable "renderer_subdomain" {
   default     = ""
 }
 
-variable "enable_ecr" {
-  description = "Enable provisioning of ECR repositories (for sandbox and prod)"
-  type        = bool
-  default     = false
-}
-
-variable "ecr_repositories" {
-  description = "List of ECR repository/service names to create for non-dev environments"
-  type        = list(string)
-  default     = ["backend", "client", "renderer", "admin"]
-}
-
-# Image Registry Configuration
-variable "image_registry_type" {
-  description = "Type of image registry to use (local, ecr, ghcr)"
-  type        = string
-  default     = "local"
-  validation {
-    condition     = contains(["local", "ecr", "ghcr"], var.image_registry_type)
-    error_message = "image_registry_type must be one of: local, ecr, ghcr"
-  }
-}
-
 # Monitoring & Backup Configuration
 variable "enable_monitoring" {
   description = "Enable monitoring and alerting"
@@ -184,6 +155,12 @@ variable "enable_cross_region_replication" {
   description = "Enable cross-region replication for disaster recovery"
   type        = bool
   default     = false
+}
+
+variable "enable_nat_gateway" {
+  description = "Enable NAT gateway for private subnets"
+  type        = bool
+  default     = true
 }
 
 # Resource Tagging

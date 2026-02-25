@@ -26,62 +26,20 @@ output "project_name" {
   value       = var.project_name
 }
 
-# Neon Outputs
-output "database_host" {
-  description = "Neon database host"
-  value       = module.neon_database.database_host
-}
-
-output "database_name" {
-  description = "Neon database name"
-  value       = module.neon_database.database_name
-}
-
-output "database_app_role" {
-  description = "Database application role"
-  value       = module.neon_database.app_role_name
-}
-
-output "neon_project_id" {
-  description = "Neon project ID"
-  value       = module.neon_database.project_id
-}
-
-output "neon_connection_string" {
-  description = "Neon connection string (replace <password> with actual password)"
-  value       = module.neon_database.connection_string
-  sensitive   = true
-}
-
 # Turso Outputs (SSM parameter paths only; secrets are NOT exposed)
 output "tenant_db_ssm_path" {
   description = "SSM parameter path for tenant DB URL"
-  value       = module.turso_database.tenant_db_ssm_path
-}
-
-output "tenant_db_name" {
-  description = "Turso tenant database name"
-  value       = module.turso_database.tenant_db_name
+  value       = "/app/${var.environment}/backend/TURSO_TENANTS_DB_URL"
 }
 
 output "analytics_db_ssm_path" {
   description = "SSM parameter path for analytics DB URL"
-  value       = module.turso_database.analytics_db_ssm_path
-}
-
-output "analytics_db_name" {
-  description = "Turso analytics database name"
-  value       = module.turso_database.analytics_db_name
+  value       = "/app/${var.environment}/backend/TURSO_ANALYTICS_DB_URL"
 }
 
 output "backup_db_ssm_path" {
   description = "SSM parameter path for backup DB URL"
-  value       = module.turso_database.backup_db_ssm_path
-}
-
-output "backup_db_name" {
-  description = "Turso backup database name"
-  value       = module.turso_database.backup_db_name
+  value       = "/app/${var.environment}/backend/TURSO_BACKUP_DB_URL"
 }
 
 # Amplify Outputs

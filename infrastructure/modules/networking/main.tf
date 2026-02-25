@@ -35,6 +35,7 @@ resource "aws_internet_gateway" "main" {
 
 # Elastic IP for NAT Gateway
 resource "aws_eip" "nat_gateway" {
+  count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
 
   depends_on = [
@@ -51,7 +52,8 @@ resource "aws_eip" "nat_gateway" {
 
 # NAT Gateway
 resource "aws_nat_gateway" "main" {
-  allocation_id     = aws_eip.nat_gateway.id
+  count             = var.enable_nat_gateway ? 1 : 0
+  allocation_id     = aws_eip.nat_gateway[0].id
   subnet_id         = element(aws_subnet.public[*].id, 0) # Use first public subnet
   connectivity_type = "public"
 
@@ -141,10 +143,10 @@ resource "aws_route_table" "private" {
 
 # Route for private route table (to NAT gateway)
 resource "aws_route" "private_nat_gateway" {
-  count                  = length(var.availability_zones)
+  count                  = var.enable_nat_gateway ? length(var.availability_zones) : 0
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.main.id
+  nat_gateway_id         = aws_nat_gateway.main[0].id
 }
 
 # Associate private subnets with private route tables

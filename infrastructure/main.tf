@@ -63,8 +63,8 @@ module "compute_backend" {
   root_volume_type           = var.root_volume_type
   ecs_cluster_name           = "${var.ecs_cluster_name}-backend"
   ecs_security_group_id      = module.security.ecs_security_group_id
-  image_registry_type        = var.image_registry_type
   region                     = var.region
+  bucket_name                = module.storage.application_storage_bucket_name
 }
 
 # Renderer compute module (Next.js + Caddy — port 443, on-demand TLS for wildcard subdomains)
@@ -90,44 +90,21 @@ module "compute_renderer" {
   root_volume_type           = var.root_volume_type
   ecs_cluster_name           = "${var.ecs_cluster_name}-renderer"
   ecs_security_group_id      = module.security.ecs_security_group_id
-  image_registry_type        = var.image_registry_type
   region                     = var.region
-}
-
-# Neon database module
-module "neon_database" {
-  source = "./modules/neon"
-
-  neon_api_key    = var.neon_api_key
-  neon_region     = var.neon_region_map[var.region]
-  resource_prefix = local.resource_prefix
-  environment     = var.environment
-  standard_tags   = local.standard_tags
-}
-
-# Turso database module
-module "turso_database" {
-  source = "./modules/turso-self-managed"
-
-  turso_api_token    = var.turso_api_token
-  turso_auth_token   = var.turso_auth_token
-  turso_organization = var.turso_organization
-  turso_group        = var.turso_group
-  resource_prefix    = local.resource_prefix
-  environment        = var.environment
-  region             = var.region
+  bucket_name                = module.storage.application_storage_bucket_name
 }
 
 # SSM module to provision application secrets as SecureString parameters
 module "ssm" {
   source = "./modules/ssm"
 
-  environment      = var.environment
-  app_key          = var.app_key
-  redis_password   = var.redis_password
-  turso_auth_token = var.turso_auth_token
-  turso_api_token  = var.turso_api_token
-  kms_key_id       = var.kms_key_id
+  environment       = var.environment
+  app_key           = var.app_key
+  redis_password    = var.redis_password
+  turso_auth_token  = var.turso_auth_token
+  turso_api_token   = var.turso_api_token
+  neon_database_url = var.neon_database_url
+  kms_key_id        = var.kms_key_id
 
   db_password                   = var.db_password
   pgadmin_default_password      = var.pgadmin_default_password
@@ -167,25 +144,6 @@ module "cloudflare" {
   enable_rate_limiting  = var.enable_rate_limiting
   rate_limit_requests   = var.rate_limit_requests
   standard_tags         = local.standard_tags
-}
-
-# Optional ECR module for sandbox and prod environments
-module "ecr" {
-  source = "./modules/ecr"
-  count  = var.enable_ecr && contains(["sandbox", "prod"], var.environment) ? 1 : 0
-
-  environment   = var.environment
-  repositories  = var.ecr_repositories
-  name_prefix   = local.resource_prefix
-  standard_tags = local.standard_tags
-}
-
-# Attach ECR pull policy to backend compute instance role when ECR is enabled
-resource "aws_iam_role_policy_attachment" "compute_instance_ecr_pull" {
-  count      = var.enable_ecr && contains(["sandbox", "prod"], var.environment) ? 1 : 0
-  role       = module.compute_backend.instance_role_name
-  policy_arn = module.ecr[0].ecr_pull_policy_arn
-  depends_on = [module.ecr, module.compute_backend]
 }
 
 # AWS Amplify module for renderer and client deployments

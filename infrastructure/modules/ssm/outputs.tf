@@ -15,7 +15,7 @@ output "turso_auth_token_path" {
 
 output "turso_api_token_path" {
   description = "SSM parameter path for TURSO_API_TOKEN"
-  value       = aws_ssm_parameter.turso_api_token.name
+  value       = length(aws_ssm_parameter.turso_api_token) > 0 ? aws_ssm_parameter.turso_api_token[0].name : ""
 }
 
 output "db_password_ssm_path" {

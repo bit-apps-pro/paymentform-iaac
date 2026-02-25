@@ -42,26 +42,11 @@ variable "renderer_subdomain" {
   default     = ""
 }
 
-variable "enable_ecr" {
-  description = "Enable provisioning of ECR repositories (for sandbox and prod)"
-  type        = bool
-  default     = false
-}
-
-variable "image_registry_type" {
-  description = "Type of image registry to use (local, ecr, ghcr)"
+variable "neon_database_url" {
+  description = "Pre-created Neon PostgreSQL connection string (DATABASE_URL)"
   type        = string
-  default     = "local"
-  validation {
-    condition     = contains(["local", "ecr", "ghcr"], var.image_registry_type)
-    error_message = "image_registry_type must be one of: local, ecr, ghcr"
-  }
-}
-
-variable "ecr_repositories" {
-  description = "List of ECR repository/service names to create for non-dev environments"
-  type        = list(string)
-  default     = ["backend", "client", "renderer", "admin"]
+  sensitive   = true
+  default     = ""
 }
 
 # Cloudflare configuration
@@ -165,52 +150,18 @@ variable "managed_by" {
   nullable    = false
 }
 
-variable "neon_api_key" {
-  description = "Neon API key for serverless database provisioning"
+variable "turso_auth_token" {
+  description = "Turso auth token for CLI operations (stored in SSM)"
   type        = string
   sensitive   = true
   nullable    = false
-}
-
-variable "neon_region_map" {
-  description = "Mapping of AWS regions to Neon regions"
-  type        = map(string)
-  default = {
-    "us-east-1"      = "aws-us-east-1"
-    "us-west-2"      = "aws-us-west-2"
-    "eu-west-1"      = "aws-eu-west-1"
-    "eu-central-1"   = "aws-eu-central-1"
-    "ap-southeast-1" = "aws-ap-southeast-1"
-    "ap-northeast-1" = "aws-ap-northeast-1"
-  }
-  nullable = false
 }
 
 variable "turso_api_token" {
-  description = "Turso API token for tenant database provisioning"
+  description = "Turso API token (used by backend for DB management)"
   type        = string
   sensitive   = true
-  nullable    = false
-}
-
-variable "turso_auth_token" {
-  description = "Turso auth token for CLI operations (stored in SSM by module)"
-  type        = string
-  sensitive   = true
-  nullable    = false
-}
-
-variable "turso_organization" {
-  description = "Turso organization name"
-  type        = string
-  nullable    = false
-}
-
-variable "turso_group" {
-  description = "Turso database group/organization"
-  type        = string
-  default     = "default"
-  nullable    = false
+  default     = ""
 }
 
 variable "app_key" {

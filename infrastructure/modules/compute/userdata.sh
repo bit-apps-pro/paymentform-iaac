@@ -20,22 +20,16 @@ systemctl start docker
 systemctl enable docker
 usermod -a -G docker ubuntu
 
-# Authenticate with ECR using IAM role
-if [ "${image_registry_type}" = "ecr" ]; then
-  aws ecr get-login-password --region ${ecr_region} \
-    | docker login --username AWS \
-      --password-stdin ${ecr_account_id}.dkr.ecr.${ecr_region}.amazonaws.com || true
+# Authenticate with GHCR using token stored in SSM
+GHCR_TOKEN=$(aws ssm get-parameter \
+  --name "/app/${environment}/backend/GHCR_TOKEN" \
+  --with-decryption \
+  --region ${region} \
+  --query Parameter.Value \
+  --output text 2>/dev/null || echo "")
+if [ -n "$GHCR_TOKEN" ]; then
+  echo "$GHCR_TOKEN" | docker login ghcr.io -u x-access-token --password-stdin || true
 fi
 
-# Authenticate with GHCR using token stored in SSM
-if [ "${image_registry_type}" = "ghcr" ]; then
-  GHCR_TOKEN=$(aws ssm get-parameter \
-    --name "/app/${environment}/backend/GHCR_TOKEN" \
-    --with-decryption \
-    --region ${region} \
-    --query Parameter.Value \
-    --output text 2>/dev/null || echo "")
-  if [ -n "$GHCR_TOKEN" ]; then
-    echo "$GHCR_TOKEN" | docker login ghcr.io -u x-access-token --password-stdin || true
-  fi
-fi
+# Export S3 uploads bucket name for application use
+echo "AWS_STORAGE_BUCKET=${bucket_name}" >> /etc/environment

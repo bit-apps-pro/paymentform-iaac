@@ -22,9 +22,17 @@ variable "turso_auth_token" {
 }
 
 variable "turso_api_token" {
-  description = "Turso API token"
+  description = "Turso API token (used by backend for DB management)"
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+variable "neon_database_url" {
+  description = "Pre-created Neon PostgreSQL connection string (stored as DATABASE_URL)"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "kms_key_id" {

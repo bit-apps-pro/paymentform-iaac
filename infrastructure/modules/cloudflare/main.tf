@@ -39,16 +39,17 @@ resource "cloudflare_dns_record" "app" {
   comment = "App dashboard - proxied through Cloudflare"
 }
 
-# DNS Record for Renderer wildcard subdomain (proxied through Cloudflare)
-# Handles multi-tenant form rendering
+# DNS Record for Renderer wildcard subdomain (DNS-only — no Cloudflare proxy)
+# Caddy on the renderer EC2 handles on-demand TLS directly for wildcard subdomains;
+# Cloudflare proxying would break the TLS handshake for wildcard certs.
 resource "cloudflare_dns_record" "renderer_wildcard" {
   zone_id = var.cloudflare_zone_id
   name    = var.renderer_subdomain
-  content = length(var.app_origin_ips) > 0 ? var.app_origin_ips[0] : var.renderer_origin_ip
+  content = var.renderer_origin_ip
   type    = "A"
-  proxied = true
-  ttl     = 1 # Automatic when proxied
-  comment = "Multi-tenant renderer wildcard - proxied through Cloudflare"
+  proxied = false
+  ttl     = 120 # TTL must be explicit for DNS-only records (ttl=1 is only valid when proxied)
+  comment = "Multi-tenant renderer wildcard - DNS-only (Caddy handles TLS directly)"
 }
 
 # WAF Custom Ruleset - Block common attacks
@@ -78,7 +79,7 @@ resource "cloudflare_ruleset" "rate_limiting" {
   name        = "${var.environment}-rate-limiting"
   description = "Rate limiting for API endpoints"
   kind        = "zone"
-  phase       = "http_request_late_transform" # Updated phase for newer provider versions
+  phase       = "http_ratelimit"
 
   rules = [
     {

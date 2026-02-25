@@ -142,10 +142,6 @@ clean:
 	@find . -name ".terraform.lock.hcl" -delete
 	@echo "Cleanup complete"
 
-cost-estimate:
-	@echo "Estimating infrastructure costs for $(ENV)..."
-	@tofu plan -var-file=infrastructure/environments/$(ENV)/terraform.tfvars -json | grep -E "resource_type|price" || echo "Cost estimation requires infracost integration"
-
 output:
 	@echo "Outputs for $(ENV) environment:"
 	@tofu output -var-file=infrastructure/environments/$(ENV)/terraform.tfvars
@@ -253,8 +249,12 @@ security-full: security-checkov security-tfsec
 cost-estimate:
 	@echo "💰 Estimating infrastructure costs for $(ENV)..."
 	@if command -v infracost >/dev/null 2>&1; then \
-		infracost breakdown --path infrastructure/environments/$(ENV)/ --format table; \
-		infracost breakdown --path infrastructure/environments/$(ENV)/ --format json > cost-estimate-$(ENV).json; \
+		infracost breakdown --path . \
+			--terraform-var-file infrastructure/environments/$(ENV)/terraform.tfvars \
+			--format table; \
+		infracost breakdown --path . \
+			--terraform-var-file infrastructure/environments/$(ENV)/terraform.tfvars \
+			--format json > cost-estimate-$(ENV).json; \
 		echo ""; \
 		echo "📄 JSON report saved to: cost-estimate-$(ENV).json"; \
 	else \
@@ -268,8 +268,12 @@ cost-estimate-all:
 		for env in dev sandbox prod; do \
 			echo ""; \
 			echo "📊 $$env environment:"; \
-			infracost breakdown --path infrastructure/environments/$$env/ --format table; \
-			infracost breakdown --path infrastructure/environments/$$env/ --format json > cost-estimate-$$env.json; \
+			infracost breakdown --path . \
+				--terraform-var-file infrastructure/environments/$$env/terraform.tfvars \
+				--format table; \
+			infracost breakdown --path . \
+				--terraform-var-file infrastructure/environments/$$env/terraform.tfvars \
+				--format json > cost-estimate-$$env.json; \
 			echo "  ✓ cost-estimate-$$env.json"; \
 		done; \
 		echo ""; \

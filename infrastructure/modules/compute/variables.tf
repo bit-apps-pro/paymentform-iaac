@@ -93,22 +93,10 @@ variable "ecs_security_group_id" {
   description = "ID of the ECS security group"
   type        = string
 }
-variable "image_registry_type" {
-  description = "Type of image registry: local | ecr | ghcr"
-  type        = string
-  default     = "local"
-}
-
-variable "ecr_account_id" {
-  description = "AWS account ID for ECR image registry"
+variable "bucket_name" {
+  description = "S3 uploads bucket name for this environment"
   type        = string
   default     = ""
-}
-
-variable "ecr_region" {
-  description = "AWS region for ECR"
-  type        = string
-  default     = "us-east-1"
 }
 
 variable "region" {
