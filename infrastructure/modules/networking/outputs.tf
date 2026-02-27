@@ -13,29 +13,14 @@ output "public_subnet_ids" {
   value       = aws_subnet.public[*].id
 }
 
-output "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  value       = aws_subnet.private[*].id
-}
-
 output "internet_gateway_id" {
   description = "ID of the internet gateway"
   value       = aws_internet_gateway.main.id
 }
 
-output "nat_gateway_id" {
-  description = "ID of the NAT gateway"
-  value       = var.enable_nat_gateway ? aws_nat_gateway.main[0].id : null
-}
-
 output "public_route_table_id" {
   description = "ID of the public route table"
   value       = aws_route_table.public.id
-}
-
-output "private_route_table_ids" {
-  description = "IDs of the private route tables"
-  value       = aws_route_table.private[*].id
 }
 
 output "vpc_cidr_block" {

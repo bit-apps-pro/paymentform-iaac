@@ -1,0 +1,34 @@
+# Wrangler configuration for Cloudflare Worker
+# This file is used for local development and deployment reference
+
+name = "paymentform-cdn-worker"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Account ID - will be overridden by Terraform
+account_id = ""
+
+# R2 bucket binding - will be overridden by Terraform
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "paymentform-uploads"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+CORS_ORIGINS = "*"
+
+# Development configuration
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Production environment
+[env.production]
+name = "paymentform-cdn-worker-prod"
+vars = { ENVIRONMENT = "production", CORS_ORIGINS = "*" }
+
+# Sandbox environment
+[env.sandbox]
+name = "paymentform-cdn-worker-sandbox"
+vars = { ENVIRONMENT = "sandbox", CORS_ORIGINS = "*" }

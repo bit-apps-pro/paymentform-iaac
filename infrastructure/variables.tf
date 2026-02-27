@@ -50,6 +50,16 @@ variable "neon_database_url" {
 }
 
 # Cloudflare configuration
+variable "cloudflare_plan" {
+  description = "Cloudflare plan type (free, pro, business, enterprise)"
+  type        = string
+  default     = "pro"
+}
+
+variable "cloudflare_api_email" {
+  description = "Cloudflare account email (required for API token authentication)"
+  type        = string
+}
 variable "cloudflare_api_token" {
   description = "Cloudflare API token for DNS and Load Balancer management"
   type        = string
@@ -68,6 +78,32 @@ variable "cloudflare_account_id" {
   description = "Cloudflare Account ID"
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+# Cloudflare R2 storage configuration
+variable "r2_bucket_name" {
+  description = "Name of the R2 bucket for application storage (without environment prefix)"
+  type        = string
+  default     = "paymentform-uploads"
+  nullable    = false
+}
+
+variable "r2_public_bucket_name" {
+  description = "Name of the R2 bucket for public files (optional, served via Worker)"
+  type        = string
+  default     = ""
+}
+
+variable "worker_enabled" {
+  description = "Enable Cloudflare Worker for public file serving"
+  type        = bool
+  default     = true
+}
+
+variable "worker_route_pattern" {
+  description = "Route pattern for the Worker (e.g., cdn.sandbox.paymentform.io/*)"
+  type        = string
   default     = ""
 }
 
@@ -279,19 +315,6 @@ variable "public_subnet_cidrs" {
   nullable    = false
 }
 
-variable "private_subnet_cidrs" {
-  description = "List of CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-  nullable    = false
-}
-
-variable "enable_nat_gateway" {
-  description = "Whether to create a NAT gateway for private subnets"
-  type        = bool
-  default     = true
-  nullable    = false
-}
 
 # Security variables
 variable "app_ports" {
@@ -612,3 +635,4 @@ variable "amplify_access_token" {
   sensitive   = true
   default     = ""
 }
+

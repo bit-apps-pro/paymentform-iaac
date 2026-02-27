@@ -9,44 +9,59 @@ variable "standard_tags" {
   default     = {}
 }
 
-variable "enable_versioning" {
-  description = "Enable versioning for S3 buckets"
+variable "cloudflare_api_email" {
+  description = "Cloudflare account email (required for API token authentication)"
+  type        = string
+}
+
+variable "cloudflare_account_id" {
+  description = "Cloudflare Account ID for R2 storage"
+  type        = string
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with R2 and Worker permissions"
+  type        = string
+  sensitive   = true
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for Worker route binding"
+  type        = string
+  default     = ""
+}
+
+variable "r2_bucket_name" {
+  description = "Name of the R2 bucket for application storage"
+  type        = string
+}
+
+variable "r2_public_bucket_name" {
+  description = "Name of the R2 bucket for public files (served via Worker)"
+  type        = string
+  default     = ""
+}
+
+variable "worker_enabled" {
+  description = "Enable Cloudflare Worker for public file serving"
   type        = bool
   default     = true
 }
 
-variable "enable_cloudfront" {
-  description = "Enable CloudFront distribution for static assets"
-  type        = bool
-  default     = false
-}
-
-variable "lifecycle_transition_days" {
-  description = "Number of days after which to transition objects to STANDARD_IA"
-  type        = number
-  default     = 30
-}
-
-variable "lifecycle_archive_days" {
-  description = "Number of days after which to archive objects to GLACIER"
-  type        = number
-  default     = 60
-}
-
-variable "lifecycle_expiration_days" {
-  description = "Number of days after which to expire object versions"
-  type        = number
-  default     = 90
-}
-
-variable "log_retention_days" {
-  description = "Number of days to retain logs in the logs bucket"
-  type        = number
-  default     = 30
+variable "worker_route_pattern" {
+  description = "Route pattern for the Worker (e.g., cdn.example.com/*)"
+  type        = string
+  default     = ""
 }
 
 variable "cors_allowed_origins" {
   description = "List of allowed origins for CORS configuration"
   type        = list(string)
   default     = ["*"]
+}
+
+variable "log_retention_days" {
+  description = "Number of days to retain logs (for future logging integration)"
+  type        = number
+  default     = 30
 }

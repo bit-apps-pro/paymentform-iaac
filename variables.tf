@@ -88,6 +88,10 @@ variable "cloudflare_api_token" {
   default     = ""
 }
 
+variable "cloudflare_api_email" {
+  description = "Cloudflare account email (required for API token authentication)"
+  type        = string
+}
 variable "cloudflare_zone_id" {
   description = "Cloudflare Zone ID for paymentform.io"
   type        = string
@@ -100,6 +104,68 @@ variable "cloudflare_account_id" {
   type        = string
   sensitive   = true
   default     = ""
+}
+
+# Cloudflare R2 storage configuration
+variable "r2_bucket_name" {
+  description = "Name of the R2 bucket for application storage (without environment prefix)"
+  type        = string
+  default     = "paymentform-uploads"
+}
+
+variable "r2_public_bucket_name" {
+  description = "Name of the R2 bucket for public files (optional, served via Worker)"
+  type        = string
+  default     = ""
+}
+
+variable "worker_enabled" {
+  description = "Enable Cloudflare Worker for public file serving"
+  type        = bool
+  default     = true
+}
+
+variable "worker_route_pattern" {
+  description = "Route pattern for the Worker (e.g., cdn.sandbox.paymentform.io/*)"
+  type        = string
+  default     = ""
+}
+
+# Cloudflare features (Pro/Business plan required for some features)
+variable "cloudflare_plan" {
+  description = "Cloudflare plan level (free, pro, business, enterprise)"
+  type        = string
+  default     = "free"
+}
+
+variable "enable_cloudflare_waf" {
+  description = "Enable Cloudflare WAF (requires Pro plan, $20/month)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_cloudflare_lb" {
+  description = "Enable Cloudflare Load Balancer (requires Business plan, $200/month)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_waf" {
+  description = "Enable WAF custom rules (requires Pro plan)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_rate_limiting" {
+  description = "Enable rate limiting rules (requires Pro plan)"
+  type        = bool
+  default     = false
+}
+
+variable "rate_limit_requests" {
+  description = "Number of requests allowed per minute for rate limiting"
+  type        = number
+  default     = 100
 }
 
 # Domain and subdomain configuration
@@ -157,11 +223,6 @@ variable "enable_cross_region_replication" {
   default     = false
 }
 
-variable "enable_nat_gateway" {
-  description = "Enable NAT gateway for private subnets"
-  type        = bool
-  default     = true
-}
 
 # Resource Tagging
 variable "common_tags" {

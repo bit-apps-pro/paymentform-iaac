@@ -5,13 +5,11 @@
 module "networking" {
   source = "./modules/networking"
 
-  environment          = var.environment
-  vpc_cidr             = var.vpc_cidr
-  availability_zones   = var.availability_zones
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
-  enable_nat_gateway   = var.enable_nat_gateway
-  standard_tags        = local.standard_tags
+  environment         = var.environment
+  vpc_cidr            = var.vpc_cidr
+  availability_zones  = var.availability_zones
+  public_subnet_cidrs = var.public_subnet_cidrs
+  standard_tags       = local.standard_tags
 }
 
 # Security module
@@ -27,16 +25,22 @@ module "security" {
   standard_tags          = local.standard_tags
 }
 
-# Storage module
+# Storage module (Cloudflare R2)
 module "storage" {
   source = "./modules/storage"
 
-  environment          = var.environment
-  standard_tags        = local.standard_tags
-  enable_versioning    = var.enable_versioning
-  enable_cloudfront    = var.enable_cloudfront
-  log_retention_days   = var.log_retention_days
-  cors_allowed_origins = var.cors_allowed_origins
+  environment           = var.environment
+  standard_tags         = local.standard_tags
+  cloudflare_api_email  = var.cloudflare_api_email
+  cloudflare_account_id = var.cloudflare_account_id
+  cloudflare_api_token  = var.cloudflare_api_token
+  cloudflare_zone_id    = var.cloudflare_zone_id
+  r2_bucket_name        = var.r2_bucket_name
+  r2_public_bucket_name = var.r2_public_bucket_name
+  worker_enabled        = var.worker_enabled
+  worker_route_pattern  = var.worker_route_pattern
+  log_retention_days    = var.log_retention_days
+  cors_allowed_origins  = var.cors_allowed_origins
 }
 
 # Compute module
@@ -129,6 +133,8 @@ module "ssm" {
 module "cloudflare" {
   source = "./modules/cloudflare"
 
+  cloudflare_api_email  = var.cloudflare_api_email
+  cloudflare_plan       = var.cloudflare_plan
   cloudflare_zone_id    = var.cloudflare_zone_id
   cloudflare_api_token  = var.cloudflare_api_token
   cloudflare_account_id = var.cloudflare_account_id

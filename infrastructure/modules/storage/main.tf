@@ -1,220 +1,64 @@
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.16.0"
     }
   }
 }
 
-# Application storage bucket
-resource "aws_s3_bucket" "application_storage" {
-  bucket = "${var.environment}-application-storage-${random_string.bucket_suffix.result}"
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+  email     = var.cloudflare_api_email
+}
 
-  tags = merge(
-    var.standard_tags,
+
+# R2 Bucket for application storage (private files)
+resource "cloudflare_r2_bucket" "application_storage" {
+  account_id = var.cloudflare_account_id
+  name       = "${var.environment}-${var.r2_bucket_name}"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Cloudflare Worker for serving public files from R2
+resource "cloudflare_workers_script" "cdn_worker" {
+  count              = var.worker_enabled && var.worker_route_pattern != "" ? 1 : 0
+  account_id         = var.cloudflare_account_id
+  script_name        = "${var.environment}-cdn-worker"
+  content            = file("${path.module}/worker/index.js")
+  compatibility_date = "2024-01-01"
+
+  # Bindings: R2 bucket and environment variables
+  bindings = [
     {
-      Name = "${var.environment}-application-storage-bucket"
-    }
-  )
-}
-
-resource "aws_s3_bucket_versioning" "application_storage_versioning" {
-  bucket = aws_s3_bucket.application_storage.id
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "application_storage_encryption" {
-  bucket = aws_s3_bucket.application_storage.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "application_storage_lifecycle" {
-  bucket = aws_s3_bucket.application_storage.id
-
-  rule {
-    id     = "transition_old_versions"
-    status = "Enabled"
-
-    filter {}
-
-    noncurrent_version_transition {
-      noncurrent_days = var.lifecycle_transition_days
-      storage_class   = "STANDARD_IA"
-    }
-
-    noncurrent_version_transition {
-      noncurrent_days = var.lifecycle_archive_days
-      storage_class   = "GLACIER"
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = var.lifecycle_expiration_days
-    }
-  }
-}
-
-# Logs bucket
-resource "aws_s3_bucket" "logs" {
-  bucket = "${var.environment}-logs-${random_string.bucket_suffix.result}"
-
-  tags = merge(
-    var.standard_tags,
+      name        = "R2_BUCKET"
+      type        = "r2_bucket"
+      bucket_name = cloudflare_r2_bucket.application_storage.name
+    },
     {
-      Name = "${var.environment}-logs-bucket"
-    }
-  )
-}
-
-resource "aws_s3_bucket_versioning" "logs_versioning" {
-  bucket = aws_s3_bucket.logs.id
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "logs_encryption" {
-  bucket = aws_s3_bucket.logs.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "logs_lifecycle" {
-  bucket = aws_s3_bucket.logs.id
-
-  rule {
-    id     = "delete_old_logs"
-    status = "Enabled"
-
-    filter {}
-
-    expiration {
-      days = var.log_retention_days
-    }
-  }
-}
-
-# Static assets bucket (for frontend)
-resource "aws_s3_bucket" "static_assets" {
-  bucket = "${var.environment}-static-assets-${random_string.bucket_suffix.result}"
-
-  tags = merge(
-    var.standard_tags,
+      name = "ENVIRONMENT"
+      type = "plain_text"
+      text = var.environment
+    },
     {
-      Name = "${var.environment}-static-assets-bucket"
+      name = "CORS_ORIGINS"
+      type = "plain_text"
+      text = join(",", var.cors_allowed_origins)
     }
-  )
+  ]
 }
 
-resource "aws_s3_bucket_versioning" "static_assets_versioning" {
-  bucket = aws_s3_bucket.static_assets.id
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
-  }
+# Worker Route - binds Worker to domain pattern
+# Requires zone_id to be passed from parent module
+resource "cloudflare_workers_route" "cdn_route" {
+  count   = var.worker_enabled && var.worker_route_pattern != "" && var.cloudflare_zone_id != "" ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  pattern = var.worker_route_pattern
+  script  = cloudflare_workers_script.cdn_worker[0].script_name
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "static_assets_encryption" {
-  bucket = aws_s3_bucket.static_assets.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-# Enable CORS for static assets bucket
-resource "aws_s3_bucket_cors_configuration" "static_assets_cors" {
-  bucket = aws_s3_bucket.static_assets.id
-
-  cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["GET", "HEAD"]
-    allowed_origins = var.cors_allowed_origins
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3000
-  }
-}
-
-# CloudFront distribution for static assets (optional)
-resource "aws_cloudfront_distribution" "static_assets_cf" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  origin {
-    domain_name = aws_s3_bucket.static_assets.bucket_regional_domain_name
-    origin_id   = "S3-${aws_s3_bucket.static_assets.id}"
-
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.static_assets_oai[0].cloudfront_access_identity_path
-    }
-  }
-
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "index.html"
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-
-  default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.static_assets.id}"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
-    viewer_protocol_policy = "redirect-to-https"
-    compress               = true
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
-  }
-
-  tags = merge(
-    var.standard_tags,
-    {
-      Name = "${var.environment}-static-assets-cloudfront"
-    }
-  )
-}
-
-# CloudFront Origin Access Identity for static assets
-resource "aws_cloudfront_origin_access_identity" "static_assets_oai" {
-  count = var.enable_cloudfront ? 1 : 0
-
-  comment = "OAI for ${var.environment} static assets"
-}
-
-# Random string for bucket suffixes
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
+# CORS configuration for R2 bucket (via Worker)
+# Note: R2 CORS is configured in the Worker response headers

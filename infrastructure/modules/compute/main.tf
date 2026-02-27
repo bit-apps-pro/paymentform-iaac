@@ -142,6 +142,10 @@ resource "aws_iam_role" "ecs_instance_role" {
       Name = "${local.prefix}-ecs-instance-role"
     }
   )
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Attach AWS managed policy for ECS instance role

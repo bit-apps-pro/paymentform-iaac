@@ -1,39 +1,29 @@
 output "application_storage_bucket_name" {
-  description = "Name of the application storage bucket"
-  value       = aws_s3_bucket.application_storage.bucket
+  description = "Name of the application storage bucket (R2)"
+  value       = cloudflare_r2_bucket.application_storage.name
 }
 
 output "application_storage_bucket_arn" {
-  description = "ARN of the application storage bucket"
-  value       = aws_s3_bucket.application_storage.arn
+  description = "ARN/ID of the application storage bucket (R2)"
+  value       = cloudflare_r2_bucket.application_storage.id
 }
 
-output "logs_bucket_name" {
-  description = "Name of the logs bucket"
-  value       = aws_s3_bucket.logs.bucket
+output "worker_name" {
+  description = "Name of the Cloudflare Worker for public file serving"
+  value       = var.worker_enabled && var.worker_route_pattern != "" ? cloudflare_workers_script.cdn_worker[0].script_name : null
 }
 
-output "logs_bucket_arn" {
-  description = "ARN of the logs bucket"
-  value       = aws_s3_bucket.logs.arn
+output "worker_url" {
+  description = "URL pattern for accessing files via Worker"
+  value       = var.worker_enabled && var.worker_route_pattern != "" ? "https://${replace(var.worker_route_pattern, "/*", "")}" : null
 }
 
-output "static_assets_bucket_name" {
-  description = "Name of the static assets bucket"
-  value       = aws_s3_bucket.static_assets.bucket
+output "r2_endpoint" {
+  description = "R2 S3-compatible endpoint URL"
+  value       = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
 }
 
-output "static_assets_bucket_arn" {
-  description = "ARN of the static assets bucket"
-  value       = aws_s3_bucket.static_assets.arn
-}
-
-output "static_assets_cloudfront_domain" {
-  description = "Domain name of the CloudFront distribution for static assets"
-  value       = var.enable_cloudfront ? aws_cloudfront_distribution.static_assets_cf[0].domain_name : null
-}
-
-output "static_assets_cloudfront_arn" {
-  description = "ARN of the CloudFront distribution for static assets"
-  value       = var.enable_cloudfront ? aws_cloudfront_distribution.static_assets_cf[0].arn : null
+output "r2_bucket_domain" {
+  description = "R2 bucket domain for direct access (private)"
+  value       = "${cloudflare_r2_bucket.application_storage.name}.r2.cloudflarestorage.com"
 }

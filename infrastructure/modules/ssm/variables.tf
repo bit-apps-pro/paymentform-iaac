@@ -119,3 +119,4 @@ variable "ghcr_token" {
   sensitive   = true
   default     = ""
 }
+

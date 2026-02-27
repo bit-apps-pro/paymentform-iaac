@@ -22,7 +22,7 @@ output "waf_ruleset_id" {
 
 output "rate_limiting_ruleset_id" {
   description = "Rate limiting ruleset ID"
-  value       = var.enable_rate_limiting ? cloudflare_ruleset.rate_limiting[0].id : null
+  value       = (var.cloudflare_plan == "business" || var.cloudflare_plan == "enterprise") && var.enable_rate_limiting ? cloudflare_ruleset.rate_limiting[0].id : null
 }
 
 output "tenants_kv_namespace_id" {

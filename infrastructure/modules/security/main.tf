@@ -21,12 +21,14 @@ resource "aws_security_group" "ecs" {
 }
 
 # Inbound rules for EC2 - allow HTTP/HTTPS from Cloudflare and application ports
+
+
 resource "aws_security_group_rule" "ecs_ingress_http" {
   type              = "ingress"
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"] # Cloudflare proxies traffic
+  cidr_blocks       = local.cloudflare_ipv4_ranges
   security_group_id = aws_security_group.ecs.id
   description       = "Allow HTTP from Cloudflare"
 }
@@ -36,7 +38,7 @@ resource "aws_security_group_rule" "ecs_ingress_https" {
   from_port         = 443
   to_port           = 443
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"] # Cloudflare proxies traffic
+  cidr_blocks       = local.cloudflare_ipv4_ranges
   security_group_id = aws_security_group.ecs.id
   description       = "Allow HTTPS from Cloudflare"
 }
@@ -48,7 +50,7 @@ resource "aws_security_group_rule" "ecs_ingress_app_ports" {
   from_port         = var.app_ports[count.index]
   to_port           = var.app_ports[count.index]
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = ["0.0.0.0/0"] # Internal/dev ports; restrict in prod
   security_group_id = aws_security_group.ecs.id
   description       = "Allow traffic on app port ${var.app_ports[count.index]}"
 }
@@ -222,6 +224,10 @@ resource "aws_kms_key" "encryption_key" {
       Name = "${var.environment}-encryption-key"
     }
   )
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_kms_alias" "encryption_key_alias" {

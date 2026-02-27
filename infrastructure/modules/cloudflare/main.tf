@@ -12,6 +12,7 @@ terraform {
 
 provider "cloudflare" {
   api_token = var.cloudflare_api_token
+  email     = var.cloudflare_api_email
 }
 
 
@@ -73,7 +74,7 @@ resource "cloudflare_ruleset" "waf_custom" {
 
 # Rate Limiting Rule
 resource "cloudflare_ruleset" "rate_limiting" {
-  count = var.enable_rate_limiting ? 1 : 0
+  count = var.cloudflare_plan == "business" || var.cloudflare_plan == "enterprise" ? 1 : 0
 
   zone_id     = var.cloudflare_zone_id
   name        = "${var.environment}-rate-limiting"
@@ -98,6 +99,7 @@ resource "cloudflare_ruleset" "rate_limiting" {
 
 # Cache Rules for static assets
 resource "cloudflare_ruleset" "cache_rules" {
+  count       = var.cloudflare_plan == "business" || var.cloudflare_plan == "enterprise" ? 1 : 0
   zone_id     = var.cloudflare_zone_id
   name        = "${var.environment}-cache-rules"
   description = "Cache rules for static assets"

@@ -1,5 +1,8 @@
 # Cloudflare Module Variables
-
+variable "cloudflare_plan" {
+  description = "Cloudflare plan type (free, pro, business, enterprise)"
+  type        = string
+}
 variable "cloudflare_zone_id" {
   description = "Cloudflare Zone ID for paymentform.io"
   type        = string
@@ -12,6 +15,11 @@ variable "cloudflare_account_id" {
 
 variable "cloudflare_api_token" {
   description = "Cloudflare API token for DNS and Load Balancer management"
+  type        = string
+}
+
+variable "cloudflare_api_email" {
+  description = "Cloudflare account email (required for API token authentication)"
   type        = string
 }
 
