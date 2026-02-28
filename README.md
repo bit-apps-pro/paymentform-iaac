@@ -1,114 +1,181 @@
 # Infrastructure as Code - PaymentForm
 
-OpenTofu/Terraform infrastructure for PaymentForm application with AWS SSM secrets management and self-managed Turso databases.
+OpenTofu/Terraform infrastructure with AWS backend, Cloudflare Containers for client/renderer, and Cloudflare R2 for storage.
 
 ## Quick Start
 
 ```bash
-# 1. Set environment variables
-cp .envrc.example .envrc
+# 1. Navigate to environment
+cd environments/sandbox
+
+# 2. Set environment variables
+cp ../../.envrc.example .envrc
 # Edit .envrc with your secrets
 source .envrc
 
-# 2. Deploy infrastructure
-cd /mnt/src/work/apps/paymentform-docker/iaac
-tofu init
-tofu plan -out=tfplan
-tofu apply tfplan
+# 3. Deploy
+tofu init && tofu plan -out=tfplan && tofu apply tfplan
 ```
 
 ## Structure
 
 ```
 iaac/
-├── infrastructure/          # Main infrastructure modules
-│   ├── modules/
-│   │   ├── ssm/            # SSM Parameter Store (16 secrets)
-│   │   ├── turso-self-managed/  # Turso CLI-based provisioning
-│   │   ├── compute/        # EC2 instances + IAM
-│   │   ├── networking/     # VPC, subnets, gateways
-│   │   ├── security/       # Security groups
-│   │   ├── storage/        # S3 buckets
-│   │   ├── neon/           # Neon PostgreSQL (central DB)
-│   │   └── cloudflare/     # DNS + KV namespaces
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-├── environments/            # Environment-specific configs
-├── ansible/                 # Configuration management
-└── scripts/                 # Deployment utilities
+├── providers/              # Cloud provider modules
+│   ├── aws/
+│   │   ├── compute/       # EC2 backend
+│   │   ├── networking/    # VPC, subnets
+│   │   ├── security/      # Security groups
+│   │   └── ssm/           # Secrets management
+│   └── cloudflare/
+│       ├── containers/    # Reusable container module
+│       ├── dns/           # DNS, WAF, rate limiting
+│       ├── r2/            # R2 buckets + SSL config
+│       └── kv/            # KV namespaces
+│
+├── environments/           # Environment-specific configs
+│   ├── dev/
+│   ├── sandbox/
+│   │   ├── main.tf        # Calls providers/
+│   │   ├── variables.tf
+│   │   └── terraform.tfvars
+│   └── prod/
+│
+├── modules/                # (Optional) Custom composed modules
+│
+├── .envrc.example          # Environment variables template
+└── terraform.tfvars.example
+```
+
+## Architecture
+
+```
+┌─────────────────┐                        ┌─────────────────────────────┐
+│   Cloudflare    │                        │      Cloudflare             │
+│      DNS        │                        │       Containers            │
+│                 │                        │                             │
+│  - api.*        │───────┐                │  ┌───────────────────────┐  │
+│  - app.*        │───┐   │                │  │  Client Container     │  │
+│  - *.renderer.* │───┼───┼────────────────│  │  (Next.js SSR)        │  │
+└─────────────────┘   │   │                │  └───────────────────────┘  │
+                      │   │                │  ┌───────────────────────┐  │
+                      │   └────────────────│  │  Renderer Container   │  │
+                      │                    │  │  (Next.js + Caddy)    │  │
+                      │                    │  └───────────────────────┘  │
+                      │                    └─────────────────────────────┘
+                      │                                    ▲
+┌─────────────────┐   │                                    │
+│      AWS        │   │  ┌──────────────────────────────┐  │
+│   (Backend)     │   │  │       Cloudflare R2          │  │
+│                 │   │  │  - Application Storage       │  │
+│  ┌───────────┐  │◄──┴──│  - SSL Config Bucket         │  │
+│  │   EC2     │  │      └──────────────────────────────┘  │
+│  │  (API)    │◄──────────────────────────────────────────┘
+│  └───────────┘  │
+│  ┌───────────┐  │      ┌──────────────────────────────┐
+│  │   SSM     │◄─┘      │       Cloudflare KV          │
+│  │  Secrets  │         │  - Tenants Namespace         │
+│  └───────────┘         └──────────────────────────────┘
+└─────────────────┘
 ```
 
 ## Key Features
 
-### SSM Secrets Management
-- 16 backend secrets stored as SecureString (KMS encrypted)
-- IAM least-privilege access for EC2
-- Path: `/app/${environment}/backend/{KEY_NAME}`
-- See: [SSM_SECRETS_GUIDE.md](./SSM_SECRETS_GUIDE.md)
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Client** | Cloudflare Containers | Next.js SSR dashboard |
+| **Renderer** | Cloudflare Containers | Next.js + Caddy for wildcard TLS |
+| **Backend** | AWS EC2 | Laravel/FrankenPHP API |
+| **Storage** | Cloudflare R2 | File uploads + SSL cert persistence |
+| **Secrets** | AWS SSM | 16 encrypted parameters |
+| **KV Store** | Cloudflare KV | Tenant session/state storage |
 
-### Turso Self-Managed
-- CLI-based provisioning (no provider)
-- 3 databases: tenants, analytics, backup
-- Credentials stored in SSM
-- See: [TURSO_GUIDE.md](./TURSO_GUIDE.md)
+## Prerequisites
 
-### Neon PostgreSQL
-- Central database (unchanged)
-- Handles DB_PASSWORD rotation only
-- Module: `infrastructure/modules/neon/`
-
-## Deployment
-
-### Prerequisites
-- OpenTofu/Terraform >= 1.5
+- OpenTofu/Terraform >= 1.8
 - AWS CLI configured
-- Turso CLI installed
-- jq (optional)
+- Cloudflare API token (permissions: Workers Scripts/Routes, Container Registry, R2, DNS)
 
-### Environment Variables
-All secrets must be set as `TF_VAR_*` environment variables. See `.envrc.example` for complete list.
+## Required Variables
 
-Required:
-- `TF_VAR_neon_api_key`
-- `TF_VAR_turso_api_token`
-- `TF_VAR_turso_auth_token`
-- `TF_VAR_cloudflare_api_token`
-- 16 backend secrets (app_key, db_password, redis_password, etc.)
-
-### Deploy
 ```bash
-tofu init
-tofu plan
-tofu apply
+# Cloudflare
+export TF_VAR_cloudflare_api_token="..."
+export TF_VAR_cloudflare_account_id="..."
+export TF_VAR_cloudflare_zone_id="..."
+
+# Containers
+export TF_VAR_client_container_image="ghcr.io/org/client:latest"
+export TF_VAR_renderer_container_image="ghcr.io/org/renderer:latest"
+export TF_VAR_ghcr_token="..."
+
+# R2 SSL Config
+export TF_VAR_r2_ssl_access_key_id="..."
+export TF_VAR_r2_ssl_secret_access_key="..."
+
+# Database
+export TF_VAR_neon_database_url="..."
+export TF_VAR_turso_api_token="..."
 ```
 
-## Security
+See `.envrc.example` for full list.
 
-- ✅ All secrets marked sensitive
-- ✅ KMS encryption (SecureString)
-- ✅ IAM least-privilege
-- ✅ No secrets in outputs/state
-- ✅ CloudTrail audit logging
+## Container Images
 
-## Documentation
+**Client (Next.js SSR):**
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY .next/standalone ./
+COPY .next/static ./.next/static
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
 
-- **[SSM_SECRETS_GUIDE.md](./SSM_SECRETS_GUIDE.md)** - SSM Parameter Store setup & usage
-- **[TURSO_GUIDE.md](./TURSO_GUIDE.md)** - Turso self-managed deployment
-- `.envrc.example` - Environment variable template
-- `terraform.tfvars.example` - Terraform variables example
+**Renderer (Next.js + Caddy):**
+```dockerfile
+FROM caddy:2-alpine
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY --from=client /app/.next/standalone /srv/app
+EXPOSE 443
+```
+
+## R2 SSL Config
+
+Renderer stores Caddy certificates in R2 for persistence across restarts:
+
+```bash
+R2_SSL_BUCKET_NAME=sandbox-paymentform-ssl-config
+R2_SSL_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
+R2_SSL_ACCESS_KEY_ID=...
+R2_SSL_SECRET_ACCESS_KEY=...
+```
 
 ## Cost Estimate
 
-- **EC2**: ~$30-50/month (t3.medium)
-- **RDS/Neon**: ~$20-40/month
-- **S3**: ~$5-10/month
-- **SSM**: <$5/month
-- **CloudFlare**: Free tier
-- **Total**: ~$60-100/month (sandbox)
+| Resource | Before | After | Savings |
+|----------|--------|-------|---------|
+| AWS Amplify | $0-25/mo | $0 | $0-25/mo |
+| EC2 Renderer | ~$15/mo | $0 | ~$15/mo |
+| Cloudflare Containers | $0 | ~$10-15/mo | -$10-15/mo |
+| R2 SSL Storage | $0 | <$1/mo | <$1/mo |
+| **Total** | **~$15-40/mo** | **~$10-16/mo** | **~$5-24/mo** |
+
+**Additional:** AWS Backend EC2 (~$15-30/mo), Neon DB (~$0-19/mo)
+
+## Migration from Amplify/EC2
+
+1. Build and push container images to GHCR
+2. Deploy with `enable_cloudflare_containers = true`
+3. Test containers (run parallel to existing infra)
+4. Update DNS to point to containers
+5. Decommission Amplify apps and renderer EC2
+
+## Documentation
+
+- `terraform.tfvars.example` - Variable examples
+- `.envrc.example` - Environment variables template
 
 ## Support
 
-- Check module READMEs in `infrastructure/modules/`
-- Review `.envrc.example` for required variables
-- See guides above for SSM and Turso specifics
+Check provider directories (`providers/aws/*/`, `providers/cloudflare/*/`) for component-specific documentation.

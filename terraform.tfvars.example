@@ -9,100 +9,128 @@
 # Core Configuration
 # ----------------------------------------------------------------------------
 project_name = "paymentform"
-environment  = "dev"  # Options: dev, sandbox, prod
+environment  = "sandbox"  # Options: dev, sandbox, prod
 region       = "us-east-1"
 
 # ----------------------------------------------------------------------------
 # Domain Configuration
 # ----------------------------------------------------------------------------
-domain_name        = "dev.paymentform.local"      # Base domain for environment
-api_subdomain      = "api.dev.paymentform.local"  # Backend API endpoint
-app_subdomain      = "app.dev.paymentform.local"  # Client dashboard
-renderer_subdomain = "*.dev.paymentform.local"    # Multi-tenant renderer (wildcard)
+domain_name        = "paymentform.io"
+api_subdomain      = "api.sandbox.paymentform.io"
+app_subdomain      = "app.sandbox.paymentform.io"
+renderer_subdomain = "*.sandbox.paymentform.io"
 
 # ----------------------------------------------------------------------------
 # Database Credentials (Required - Sensitive!)
 # ----------------------------------------------------------------------------
-# Neon (Serverless PostgreSQL) - Main application database
-neon_api_key = "REPLACE_WITH_YOUR_NEON_API_KEY"  # Get from: https://console.neon.tech/app/settings/api-keys
-
-# Turso (Edge SQLite) - Tenant databases
-turso_api_token = "REPLACE_WITH_YOUR_TURSO_API_TOKEN"  # Get from: turso auth token
-
-# Optional: AWS Secrets Manager ARNs (if storing credentials there)
-# neon_api_key_secret_arn  = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:neon-api-key"
-# turso_token_secret_arn   = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:turso-api-token"
+neon_database_url = "postgresql://user:password@host.neon.tech/dbname"
+turso_api_token   = "your_turso_api_token"
 
 # ----------------------------------------------------------------------------
-# Image Registry Configuration (Local Build & Deploy)
+# Cloudflare Configuration
 # ----------------------------------------------------------------------------
-# For dev: use local docker-compose (no registry, $0 cost)
-# For sandbox/prod: use AWS ECR ($1-5/month with lifecycle policies)
-
-image_registry_type = "local"  # Options: local, ecr, ghcr
-enable_ecr          = false    # Set to true for sandbox/prod
-
-# ECR Configuration (only needed if enable_ecr = true)
-# ecr_account_id = "123456789012"  # AWS Account ID (run: aws sts get-caller-identity --query Account --output text)
-# ecr_region     = "us-east-1"
-# ecr_repositories = ["backend", "client", "renderer", "admin"]
+cloudflare_api_email  = "your@email.com"
+cloudflare_api_token  = "YOUR_CLOUDFLARE_API_TOKEN"
+cloudflare_zone_id    = "YOUR_ZONE_ID"
+cloudflare_account_id = "YOUR_ACCOUNT_ID"
 
 # ----------------------------------------------------------------------------
-# Cloudflare Configuration (Optional)
+# Cloudflare Containers Configuration (NEW - replaces Amplify & EC2 Renderer)
 # ----------------------------------------------------------------------------
-# Cloudflare API token (Account-level, not zone-level)
-# Required permissions: Workers KV Storage: Edit, Workers Scripts: Edit, Account Settings: Read
-# cloudflare_api_token  = "YOUR_CLOUDFLARE_API_TOKEN"  # For DNS/CDN/KV management
-# cloudflare_zone_id    = "YOUR_ZONE_ID"
-# cloudflare_account_id = "YOUR_ACCOUNT_ID"
+enable_cloudflare_containers = true
+
+# Client container (Next.js standalone SSR build)
+client_container_image = "ghcr.io/your-org/paymentform-client:latest"
+client_container_env_vars = {
+  NEXT_PUBLIC_API_URL = "https://api.sandbox.paymentform.io"
+  NODE_ENV            = "production"
+}
+
+# Renderer container (Next.js + Caddy for wildcard TLS)
+renderer_container_image = "ghcr.io/your-org/paymentform-renderer:latest"
+renderer_container_env_vars = {
+  NEXT_PUBLIC_API_URL = "https://api.sandbox.paymentform.io"
+  NODE_ENV            = "production"
+}
+
+# Container resource allocation
+container_deployment_cpu       = "0.5"
+container_deployment_memory_mb = 512
+container_instance_min_count   = 1
 
 # ----------------------------------------------------------------------------
-# AWS Amplify Configuration (Optional)
+# R2 Storage Configuration
 # ----------------------------------------------------------------------------
-# Enable Amplify for renderer and client deployments
-# enable_amplify = false
+r2_bucket_name = "paymentform-uploads"
 
-# Renderer Configuration
-# renderer_repository_url      = "https://github.com/your-org/renderer"
-# renderer_branch_name         = "main"
-# renderer_custom_domain       = "renderer.yourdomain.com"
-# renderer_subdomain_prefix    = ""  # Leave empty for root domain
-# renderer_env_vars = {
-#   NEXT_PUBLIC_API_URL = "https://api.yourdomain.com"
-#   NODE_ENV            = "production"
-# }
+# SSL config bucket for Caddy certificates (renderer container)
+r2_ssl_bucket_name       = "paymentform-ssl-config"
+r2_ssl_access_key_id     = "YOUR_R2_SSL_ACCESS_KEY"
+r2_ssl_secret_access_key = "YOUR_R2_SSL_SECRET_KEY"
 
-# Client Configuration
-# client_repository_url      = "https://github.com/your-org/client"
-# client_branch_name         = "main"
-# client_custom_domain       = "app.yourdomain.com"
-# client_subdomain_prefix    = ""  # Leave empty for root domain
-# client_env_vars = {
-#   NEXT_PUBLIC_API_URL = "https://api.yourdomain.com"
-#   NODE_ENV            = "production"
-# }
+# Worker for public file serving (optional)
+worker_enabled       = true
+worker_route_pattern = "cdn.sandbox.paymentform.io/*"
 
-# Access token for private repositories
-# amplify_access_token = "ghp_xxxxxxxxxxxx"  # GitHub personal access token
+# ----------------------------------------------------------------------------
+# KV Store Configuration
+# ----------------------------------------------------------------------------
+kv_store_api_token = "YOUR_KV_STORE_API_TOKEN"
+
+# ----------------------------------------------------------------------------
+# AWS Configuration (Backend EC2 only)
+# ----------------------------------------------------------------------------
+backend_instance_type    = "t4g.micro"
+backend_desired_capacity = 1
+backend_ami_id           = "" # Leave empty to use default
+
+# GHCR token for pulling container images
+ghcr_token = "ghp_YOUR_GITHUB_TOKEN"
+
+# ----------------------------------------------------------------------------
+# Application Secrets (Stored in AWS SSM)
+# ----------------------------------------------------------------------------
+app_key                      = "your_laravel_app_key"
+db_password                  = "your_db_password"
+pgadmin_default_password     = "your_pgadmin_password"
+tenant_db_auth_token         = "your_tenant_db_jwt"
+tenant_db_encryption_key     = "your_encryption_key"
+mail_password                = "your_smtp_password"
+aws_access_key_id            = "YOUR_AWS_ACCESS_KEY"
+aws_secret_access_key        = "YOUR_AWS_SECRET_KEY"
+google_client_secret         = "your_google_oauth_secret"
+stripe_secret                = "sk_test_your_stripe_secret"
+stripe_client_id             = "ca_your_stripe_client_id"
+stripe_connect_webhook_secret = "whsec_your_webhook_secret"
+turso_auth_token             = "your_turso_auth_token"
+redis_password               = "your_redis_password"
+
+# ----------------------------------------------------------------------------
+# Legacy AWS Amplify Configuration (DEPRECATED - use Cloudflare Containers)
+# ----------------------------------------------------------------------------
+enable_amplify = false
+
+# If using Amplify (not recommended):
+# renderer_repository_url = "https://github.com/your-org/renderer"
+# renderer_branch_name    = "main"
+# client_repository_url   = "https://github.com/your-org/client"
+# client_branch_name      = "main"
+# amplify_access_token    = "ghp_YOUR_TOKEN"
 
 # ----------------------------------------------------------------------------
 # Monitoring & Backup
 # ----------------------------------------------------------------------------
-enable_monitoring               = true
-enable_backup                   = true
-backup_retention_days           = 7      # Dev: 7 days, Sandbox: 14, Prod: 30+
-enable_encryption               = true
-enable_cross_region_replication = false  # Only enable for sandbox/prod
+enable_monitoring = true
+enable_backup     = true
 
 # ----------------------------------------------------------------------------
 # Resource Tagging
 # ----------------------------------------------------------------------------
 common_tags = {
-  Environment = "development"
+  Environment = "sandbox"
   Terraform   = "true"
   ManagedBy   = "opentofu"
   CostCenter  = "development"
-  AutoDelete  = "true"  # For automated cleanup in dev
 }
 
 cost_center = "development"
@@ -112,17 +140,15 @@ managed_by  = "opentofu"
 # ----------------------------------------------------------------------------
 # Cost Optimization Notes
 # ----------------------------------------------------------------------------
-# Dev Environment:    $0 (local docker-compose, no registry)
-# Sandbox Environment: ~$1-3/month (ECR with lifecycle policies)
-# Prod Environment:    ~$2-5/month (ECR with lifecycle policies)
-# 
-# Total ECR Cost: ~$3-8/month (vs $5-20 without optimization)
+# Cloudflare Containers: ~$10-15/month (vs $30-50 for EC2 renderer)
+# Cloudflare Pages: Free tier available (vs $0-25 for Amplify)
+# R2 SSL Storage: <$1/month
+#
+# Total Savings: ~$20-40/month compared to AWS Amplify + EC2 renderer
 #
 # Quick Start:
 #   1. Copy this file: cp terraform.tfvars.example terraform.tfvars
-#   2. Set neon_api_key and turso_api_token
-#   3. For dev:     make dev-local
-#   4. For sandbox: make local-deploy ENV=sandbox
+#   2. Set your secrets and container images
+#   3. Run: tofu init && tofu plan && tofu apply
 #
-# Documentation: docs/LOCAL-BUILD-DEPLOY.md
 # ============================================================================

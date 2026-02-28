@@ -1,25 +1,128 @@
-export AWS_PROFILE=${AWS_PROFILE:-default}   # set to your SSO profile name
-export TF_VAR_neon_database_url=$NEON_DATABASE_URL
-export TF_VAR_turso_api_token=$TURSO_API_KEY
-export TF_VAR_turso_auth_token=$TURSO_AUTH_TOKEN
-export TF_VAR_amplify_access_token=$GITHUB_PERSONAL_ACCESS_TOKEN
-export TF_VAR_ghcr_token=$GHCR_TOKEN
+# ============================================================================
+# Environment Variables for PaymentForm Infrastructure
+# ============================================================================
+# Copy this file to .envrc and fill in your actual values
+# Then run: source .envrc (or direnv allow)
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# AWS Configuration
+# ----------------------------------------------------------------------------
+export AWS_PROFILE=${AWS_PROFILE:-default}
+export AWS_REGION="us-east-1"
+
+# ----------------------------------------------------------------------------
+# Cloudflare Configuration
+# ----------------------------------------------------------------------------
+export TF_VAR_cloudflare_api_email="your@email.com"
 export TF_VAR_cloudflare_api_token="$CF_API_KEY"
 export TF_VAR_cloudflare_zone_id="$CF_ZONE_ID"
 export TF_VAR_cloudflare_account_id="$CF_ACCOUNT_ID"
-# Optional secrets stored in SSM (can be provided as TF vars during bootstrap)
-# export TF_VAR_app_key=$APP_KEY
-# export TF_VAR_redis_password=$REDIS_PASSWORD
-# Additional backend secrets (set during bootstrap or provide via TF_VAR)
-# export TF_VAR_db_password="your-db-password-here"           # DB_PASSWORD (Postgres)
-# export TF_VAR_pgadmin_default_password="your-pgadmin-pass" # PGADMIN_DEFAULT_PASSWORD
-# export TF_VAR_tenant_db_auth_token="your-tenant-jwt"      # TENANT_DB_AUTH_TOKEN
-# export TF_VAR_tenant_db_encryption_key="your-encryption-key" # TENANT_DB_ENCRYPTION_KEY
-# export TF_VAR_mail_password="your-smtp-password"          # MAIL_PASSWORD
-# export TF_VAR_aws_access_key_id="your-aws-access-key-id"  # AWS_ACCESS_KEY_ID
-# export TF_VAR_aws_secret_access_key="your-aws-secret-key" # AWS_SECRET_ACCESS_KEY
-# export TF_VAR_google_client_secret="your-google-secret"   # GOOGLE_CLIENT_SECRET
-# export TF_VAR_stripe_secret="your-stripe-secret"          # STRIPE_SECRET
-# export TF_VAR_stripe_client_id="your-stripe-client-id"    # STRIPE_CLIENT_ID
-# export TF_VAR_stripe_connect_webhook_secret="your-webhook-secret" # STRIPE_CONNECT_WEBHOOK_SECRET
-# export TF_VAR_kv_store_api_token="your-kv-store-token"    # KV_STORE_API_TOKEN
+
+# ----------------------------------------------------------------------------
+# Cloudflare Containers Configuration
+# ----------------------------------------------------------------------------
+# Container images (build and push these to GHCR first)
+export TF_VAR_client_container_image="ghcr.io/your-org/paymentform-client:latest"
+export TF_VAR_renderer_container_image="ghcr.io/your-org/paymentform-renderer:latest"
+
+# Enable Cloudflare Containers (replaces AWS Amplify and EC2 renderer)
+export TF_VAR_enable_cloudflare_containers=true
+
+# Container resource allocation
+export TF_VAR_container_deployment_cpu="0.5"
+export TF_VAR_container_deployment_memory_mb=512
+export TF_VAR_container_instance_min_count=1
+
+# Container environment variables
+export TF_VAR_client_container_env_vars='{
+  NEXT_PUBLIC_API_URL = "https://api.sandbox.paymentform.io",
+  NODE_ENV = "production"
+}'
+
+export TF_VAR_renderer_container_env_vars='{
+  NEXT_PUBLIC_API_URL = "https://api.sandbox.paymentform.io",
+  NODE_ENV = "production"
+}'
+
+# ----------------------------------------------------------------------------
+# R2 Storage Configuration
+# ----------------------------------------------------------------------------
+export TF_VAR_r2_bucket_name="paymentform-uploads"
+export TF_VAR_r2_ssl_bucket_name="paymentform-ssl-config"
+export TF_VAR_r2_ssl_access_key_id="$R2_SSL_ACCESS_KEY_ID"
+export TF_VAR_r2_ssl_secret_access_key="$R2_SSL_SECRET_ACCESS_KEY"
+
+# Worker for public file serving
+export TF_VAR_worker_enabled=true
+export TF_VAR_worker_route_pattern="cdn.sandbox.paymentform.io/*"
+
+# ----------------------------------------------------------------------------
+# KV Store Configuration
+# ----------------------------------------------------------------------------
+export TF_VAR_kv_store_api_token="$KV_STORE_API_TOKEN"
+
+# ----------------------------------------------------------------------------
+# Database Configuration
+# ----------------------------------------------------------------------------
+export TF_VAR_neon_database_url="$NEON_DATABASE_URL"
+export TF_VAR_turso_api_token="$TURSO_API_KEY"
+export TF_VAR_turso_auth_token="$TURSO_AUTH_TOKEN"
+
+# ----------------------------------------------------------------------------
+# Container Registry (GHCR)
+# ----------------------------------------------------------------------------
+export TF_VAR_ghcr_token="$GHCR_TOKEN"
+
+# ----------------------------------------------------------------------------
+# Application Secrets (Stored in AWS SSM)
+# ----------------------------------------------------------------------------
+# Uncomment and set these if not using SSM bootstrap
+# export TF_VAR_app_key="$APP_KEY"
+# export TF_VAR_redis_password="$REDIS_PASSWORD"
+# export TF_VAR_db_password="$DB_PASSWORD"
+# export TF_VAR_pgadmin_default_password="$PGADMIN_PASSWORD"
+# export TF_VAR_tenant_db_auth_token="$TENANT_DB_AUTH_TOKEN"
+# export TF_VAR_tenant_db_encryption_key="$TENANT_DB_ENCRYPTION_KEY"
+# export TF_VAR_mail_password="$MAIL_PASSWORD"
+# export TF_VAR_aws_access_key_id="$AWS_ACCESS_KEY_ID"
+# export TF_VAR_aws_secret_access_key="$AWS_SECRET_ACCESS_KEY"
+# export TF_VAR_google_client_secret="$GOOGLE_CLIENT_SECRET"
+# export TF_VAR_stripe_secret="$STRIPE_SECRET"
+# export TF_VAR_stripe_client_id="$STRIPE_CLIENT_ID"
+# export TF_VAR_stripe_connect_webhook_secret="$STRIPE_WEBHOOK_SECRET"
+
+# ----------------------------------------------------------------------------
+# Legacy AWS Amplify (DEPRECATED - use Cloudflare Containers)
+# ----------------------------------------------------------------------------
+# export TF_VAR_enable_amplify=false
+# export TF_VAR_amplify_access_token="$GITHUB_PERSONAL_ACCESS_TOKEN"
+
+# ----------------------------------------------------------------------------
+# Domain Configuration
+# ----------------------------------------------------------------------------
+export TF_VAR_domain_name="paymentform.io"
+export TF_VAR_api_subdomain="api.sandbox.paymentform.io"
+export TF_VAR_app_subdomain="app.sandbox.paymentform.io"
+export TF_VAR_renderer_subdomain="*.sandbox.paymentform.io"
+
+# ----------------------------------------------------------------------------
+# Environment
+# ----------------------------------------------------------------------------
+export TF_VAR_environment="sandbox"
+export TF_VAR_region="us-east-1"
+export TF_VAR_project_name="paymentform"
+
+# ============================================================================
+# Usage:
+#   1. Copy: cp .envrc.example .envrc
+#   2. Edit .envrc with your actual values
+#   3. Run: source .envrc (or direnv allow)
+#   4. Deploy: tofu init && tofu plan && tofu apply
+#
+# Note: Cloudflare Containers API requires additional permissions:
+#   - Workers Scripts: Edit
+#   - Workers Routes: Edit
+#   - Account Settings: Read
+#   - Container Registry: Edit
+# ============================================================================

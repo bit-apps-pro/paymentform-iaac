@@ -1,0 +1,42 @@
+# Sandbox Environment Variables
+# Copy to terraform.tfvars and fill in actual values
+
+# Cloudflare
+cloudflare_api_email      = "your@email.com"
+cloudflare_api_token      = "YOUR_CF_API_TOKEN"
+cloudflare_account_id     = "YOUR_CF_ACCOUNT_ID"
+cloudflare_zone_id        = "YOUR_CF_ZONE_ID"
+
+# Container Registry
+ghcr_token = "ghp_YOUR_GITHUB_TOKEN"
+
+# Container Images
+client_container_image   = "ghcr.io/your-org/paymentform-client:latest"
+renderer_container_image = "ghcr.io/your-org/paymentform-renderer:latest"
+
+# R2 SSL Config
+r2_ssl_access_key_id     = "YOUR_R2_ACCESS_KEY"
+r2_ssl_secret_access_key = "YOUR_R2_SECRET_KEY"
+
+# KV Store
+kv_store_api_token = "YOUR_KV_TOKEN"
+
+# Database
+neon_database_url = "postgresql://..."
+turso_auth_token  = "YOUR_TURSO_AUTH"
+turso_api_token   = "YOUR_TURSO_API"
+
+# Application Secrets
+app_key                  = "your-laravel-app-key"
+redis_password           = "your-redis-password"
+db_password              = "your-db-password"
+pgadmin_default_password = "your-pgadmin-password"
+tenant_db_auth_token     = "your-tenant-jwt"
+tenant_db_encryption_key = "your-encryption-key"
+mail_password            = "your-smtp-password"
+aws_access_key_id        = "YOUR_AWS_KEY"
+aws_secret_access_key    = "YOUR_AWS_SECRET"
+google_client_secret     = "your-google-secret"
+stripe_secret            = "sk_test_..."
+stripe_client_id         = "ca_..."
+stripe_connect_webhook_secret = "whsec_..."
