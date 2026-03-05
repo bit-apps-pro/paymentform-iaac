@@ -40,13 +40,25 @@ variable "replica_instance_type" {
 variable "primary_volume_size" {
   description = "Root volume size for primary (GB)"
   type        = number
-  default     = 20
+  default     = 10
+}
+
+variable "primary_data_volume_size" {
+  description = "Data volume size for primary PostgreSQL (GB)"
+  type        = number
+  default     = 50
 }
 
 variable "replica_volume_size" {
   description = "Root volume size for replica (GB)"
   type        = number
-  default     = 20
+  default     = 10
+}
+
+variable "replica_data_volume_size" {
+  description = "Data volume size for replica PostgreSQL (GB)"
+  type        = number
+  default     = 50
 }
 
 variable "volume_type" {
@@ -125,8 +137,80 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "availability_zone" {
+  description = "Availability zone for primary (e.g., us-east-1a)"
+  type        = string
+  default     = "us-east-1a"
+}
+
+variable "replica_availability_zone" {
+  description = "Availability zone for replica (e.g., us-east-1b)"
+  type        = string
+  default     = "us-east-1b"
+}
+
+variable "cross_region_availability_zone" {
+  description = "Availability zone for cross-region replica (e.g., eu-west-1a)"
+  type        = string
+  default     = "eu-west-1a"
+}
+
 variable "assign_eip" {
   description = "Assign EIP to PostgreSQL primary for stable IP"
   type        = bool
   default     = false
+}
+
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail logging for audit"
+  type        = bool
+  default     = true
+}
+
+variable "cloudtrail_retention_days" {
+  description = "CloudTrail log retention days (365 for SOC2, 90 for PCI)"
+  type        = number
+  default     = 365
+}
+
+variable "enable_backup" {
+  description = "Enable automated EBS snapshots"
+  type        = bool
+  default     = true
+}
+
+variable "backup_retention_days" {
+  description = "Number of days to retain snapshots"
+  type        = number
+  default     = 30
+}
+
+variable "backup_schedule" {
+  description = "Cron schedule for backups (default: daily at 2am UTC)"
+  type        = string
+  default     = "cron(0 2 * ? *)"
+}
+
+variable "enable_cross_region_replica" {
+  description = "Enable cross-region read replica"
+  type        = bool
+  default     = false
+}
+
+variable "replica_region" {
+  description = "AWS region for cross-region replica"
+  type        = string
+  default     = ""
+}
+
+variable "replica_subnet_ids" {
+  description = "Subnet IDs for cross-region replica"
+  type        = list(string)
+  default     = []
+}
+
+variable "replica_vpc_id" {
+  description = "VPC ID for cross-region replica"
+  type        = string
+  default     = ""
 }

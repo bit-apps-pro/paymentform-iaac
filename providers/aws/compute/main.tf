@@ -33,6 +33,10 @@ resource "aws_launch_template" "compute" {
     bucket_name        = var.bucket_name
     service_type       = var.service_type
     container_env_vars = var.container_env_vars
+    enable_pgbouncer  = var.enable_pgbouncer
+    db_host            = var.db_read_replica_hosts != [] ? var.db_read_replica_hosts[0] : ""
+    db_name            = var.db_name
+    db_password        = var.db_password
   }))
 
   key_name      = var.key_pair_name

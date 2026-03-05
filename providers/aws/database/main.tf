@@ -31,11 +31,38 @@ resource "aws_eip_association" "primary" {
   allocation_id = aws_eip.primary[0].id
 }
 
+# Separate data volume for PostgreSQL (allows resizing)
+resource "aws_ebs_volume" "primary_data" {
+  availability_zone = var.availability_zone
+  size              = var.primary_data_volume_size
+  type              = var.volume_type
+  encrypted         = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+
+  tags = merge(
+    var.standard_tags,
+    {
+      Name = "${local.prefix}-postgresql-data"
+    }
+  )
+}
+
+resource "aws_volume_attachment" "primary_data_attachment" {
+  device_name = "/dev/sdf"
+  volume_id   = aws_ebs_volume.primary_data.id
+  instance_id = aws_instance.postgresql_primary.id
+}
+
 # EC2 Instance for PostgreSQL Primary
 resource "aws_instance" "postgresql_primary" {
   ami           = var.ami_id
   instance_type = var.primary_instance_type
   subnet_id     = var.subnet_ids[0]
+
+  disable_api_termination = true
 
   vpc_security_group_ids = [
     var.security_group_id
@@ -69,7 +96,37 @@ resource "aws_instance" "postgresql_primary" {
     r2_secret_key          = var.r2_secret_key
     pgbackrest_cipher_pass = var.pgbackrest_cipher_pass
     region                 = var.region
+    data_volume_device     = "/dev/sdf"
   }))
+
+  depends_on = [aws_volume_attachment.primary_data_attachment]
+}
+
+# Separate data volume for PostgreSQL Replica
+resource "aws_ebs_volume" "replica_data" {
+  count             = var.enable_replica ? 1 : 0
+  availability_zone = var.replica_availability_zone
+  size              = var.replica_data_volume_size
+  type              = var.volume_type
+  encrypted         = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+
+  tags = merge(
+    var.standard_tags,
+    {
+      Name = "${local.prefix}-postgresql-replica-data"
+    }
+  )
+}
+
+resource "aws_volume_attachment" "replica_data_attachment" {
+  count    = var.enable_replica ? 1 : 0
+  device_name = "/dev/sdf"
+  volume_id   = aws_ebs_volume.replica_data[0].id
+  instance_id = aws_instance.postgresql_replica[0].id
 }
 
 # EC2 Instance for PostgreSQL Replica
@@ -78,6 +135,8 @@ resource "aws_instance" "postgresql_replica" {
   ami           = var.ami_id
   instance_type = var.replica_instance_type
   subnet_id     = length(var.subnet_ids) > 1 ? var.subnet_ids[1] : var.subnet_ids[0]
+
+  disable_api_termination = true
 
   vpc_security_group_ids = [
     var.security_group_id
@@ -98,14 +157,15 @@ resource "aws_instance" "postgresql_replica" {
   )
 
   user_data = base64encode(templatefile("${path.module}/userdata-replica.sh", {
-    environment      = var.environment
-    postgres_version = var.postgres_version
-    primary_ip       = aws_instance.postgresql_primary.private_ip
-    db_user          = var.db_user
-    db_password      = var.db_password
+    environment         = var.environment
+    postgres_version    = var.postgres_version
+    primary_ip          = aws_instance.postgresql_primary.private_ip
+    db_user             = var.db_user
+    db_password         = var.db_password
+    data_volume_device  = "/dev/sdf"
   }))
 
-  depends_on = [aws_instance.postgresql_primary]
+  depends_on = [aws_volume_attachment.replica_data_attachment]
 }
 
 # IAM Role for EC2 to access S3/R2 for pgbackrest
@@ -162,4 +222,64 @@ resource "aws_iam_policy" "pgbackrest_s3_access" {
 resource "aws_iam_role_policy_attachment" "pgbackrest_s3_attachment" {
   role       = aws_iam_role.pgbackrest_role.name
   policy_arn = aws_iam_policy.pgbackrest_s3_access.arn
+}
+
+# Cross-region Replica Data Volume
+resource "aws_ebs_volume" "cross_region_data" {
+  count                = var.enable_cross_region_replica ? 1 : 0
+  availability_zone   = var.cross_region_availability_zone
+  size                = var.replica_data_volume_size
+  type                = var.volume_type
+  encrypted           = true
+
+  tags = merge(
+    var.standard_tags,
+    {
+      Name = "${local.prefix}-postgresql-cross-region-data"
+    }
+  )
+}
+
+resource "aws_volume_attachment" "cross_region_data_attachment" {
+  count       = var.enable_cross_region_replica ? 1 : 0
+  device_name = "/dev/sdf"
+  volume_id   = aws_ebs_volume.cross_region_data[0].id
+  instance_id = aws_instance.postgresql_cross_region_replica[0].id
+}
+
+# Cross-region Read Replica
+resource "aws_instance" "postgresql_cross_region_replica" {
+  count                = var.enable_cross_region_replica ? 1 : 0
+  ami                  = var.ami_id
+  instance_type        = var.replica_instance_type
+  subnet_id            = var.replica_subnet_ids[0]
+
+  vpc_security_group_ids = [
+    var.security_group_id
+  ]
+
+  root_block_device {
+    volume_size = var.replica_volume_size
+    volume_type = var.volume_type
+    encrypted   = true
+  }
+
+  tags = merge(
+    var.standard_tags,
+    {
+      Name = "${local.prefix}-postgresql-cross-region-replica"
+      Role = "postgresql-replica-cross-region"
+    }
+  )
+
+  user_data = base64encode(templatefile("${path.module}/userdata-replica.sh", {
+    environment         = var.environment
+    postgres_version    = var.postgres_version
+    primary_ip          = aws_instance.postgresql_primary.private_ip
+    db_user             = var.db_user
+    db_password         = var.db_password
+    data_volume_device  = "/dev/sdf"
+  }))
+
+  depends_on = [aws_instance.postgresql_primary]
 }

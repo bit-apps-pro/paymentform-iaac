@@ -35,3 +35,5 @@ outputs.json
 terraform.tfvars
 .envrc
 tofu.plan
+.infracost/
+cost-estimate*

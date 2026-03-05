@@ -132,3 +132,58 @@ variable "notification_email" {
   type        = string
   default     = ""
 }
+
+# Multi-region Geo Routing
+variable "enable_geo_routing" {
+  description = "Enable geo-routing to multiple regions"
+  type        = bool
+  default     = false
+}
+
+variable "region_endpoints" {
+  description = "Map of region names to their endpoints (e.g., { us = \"1.2.3.4\", eu = \"5.6.7.8\", au = \"9.10.11.12\" })"
+  type        = map(string)
+  default     = {}
+}
+
+variable "default_region" {
+  description = "Default region to route to if geo lookup fails"
+  type        = string
+  default     = "us"
+}
+
+variable "enable_load_balancer" {
+  description = "Enable Cloudflare Load Balancer (requires Pro plan + $5/mo)"
+  type        = bool
+  default     = false
+}
+
+variable "load_balancer_description" {
+  description = "Description for the load balancer"
+  type        = string
+  default     = "Multi-region load balancer"
+}
+
+variable "lb_health_check_path" {
+  description = "Health check path for load balancer pools"
+  type        = string
+  default     = "/health"
+}
+
+variable "lb_health_check_timeout" {
+  description = "Health check timeout in seconds"
+  type        = number
+  default     = 5
+}
+
+variable "lb_health_check_interval" {
+  description = "Health check interval in seconds"
+  type        = number
+  default     = 30
+}
+
+variable "lb_account_id" {
+  description = "Cloudflare account ID for load balancer"
+  type        = string
+  default     = ""
+}

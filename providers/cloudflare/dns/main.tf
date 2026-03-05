@@ -24,8 +24,22 @@ locals {
   renderer_target = var.renderer_container_endpoint != "" ? var.renderer_container_endpoint : var.renderer_origin_ip
 }
 
-# DNS Record for API subdomain (proxied through Cloudflare)
+# Geo-routing A records for API (multi-region)
+resource "cloudflare_dns_record" "api_region" {
+  for_each = var.enable_geo_routing ? var.region_endpoints : tomap({})
+
+  zone_id = var.cloudflare_zone_id
+  name    = var.api_subdomain
+  content = each.value
+  type    = "A"
+  proxied = true
+  ttl     = 1
+  comment = "API endpoint - ${each.key} region"
+}
+
+# Default API record (when not using geo-routing)
 resource "cloudflare_dns_record" "api" {
+  count   = var.enable_geo_routing ? 0 : 1
   zone_id = var.cloudflare_zone_id
   name    = var.api_subdomain
   content = local.api_target
@@ -136,3 +150,19 @@ resource "cloudflare_ruleset" "cache_rules" {
     }
   ]
 }
+
+# ============================================================================
+# Cloudflare Load Balancer (for multi-region geo-steering)
+# NOTE: For Pro plan with Load Balancer add-on ($5/mo), configure manually in 
+# Cloudflare dashboard or update when Terraform provider syntax is verified.
+# 
+# To enable via Terraform:
+# 1. Create health monitors
+# 2. Create pools for each region (us, eu, au)
+# 3. Create load balancer with country/pop pools
+# 
+# Or configure manually: Cloudflare Dashboard > Load Balancing > Create Load Balancer
+# ============================================================================
+
+# Placeholder - load balancer can be added once Terraform provider syntax is confirmed
+# For now, use Cloudflare dashboard to set up geo-steering

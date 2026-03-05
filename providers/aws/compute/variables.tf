@@ -126,3 +126,28 @@ variable "container_env_vars" {
   type        = map(string)
   default     = {}
 }
+
+variable "db_read_replica_hosts" {
+  description = "List of read replica host IPs/domains for PostgreSQL"
+  type        = list(string)
+  default     = []
+}
+
+variable "enable_pgbouncer" {
+  description = "Enable PgBouncer for connection pooling and failover"
+  type        = bool
+  default     = false
+}
+
+variable "db_name" {
+  description = "Database name for PgBouncer"
+  type        = string
+  default     = "shopper_backend"
+}
+
+variable "db_password" {
+  description = "Database password for PgBouncer"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

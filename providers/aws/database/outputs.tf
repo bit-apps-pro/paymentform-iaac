@@ -43,3 +43,13 @@ output "eip_allocation_id" {
   description = "EIP allocation ID for PostgreSQL primary"
   value       = var.assign_eip ? aws_eip.primary[0].id : null
 }
+
+output "cross_region_replica_private_ip" {
+  description = "Private IP of the cross-region PostgreSQL replica"
+  value       = var.enable_cross_region_replica ? aws_instance.postgresql_cross_region_replica[0].private_ip : null
+}
+
+output "cross_region_replica_endpoint" {
+  description = "Cross-region replica endpoint (private IP)"
+  value       = var.enable_cross_region_replica ? aws_instance.postgresql_cross_region_replica[0].private_ip : null
+}
