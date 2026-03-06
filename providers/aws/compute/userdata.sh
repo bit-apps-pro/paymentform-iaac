@@ -76,6 +76,33 @@ install_docker() {
   log "Docker installed successfully"
 }
 
+install_ssm_agent() {
+  log "Installing AWS SSM Agent..."
+  
+  # Check if already installed
+  if command -v amazon-ssm-agent &> /dev/null; then
+    log "SSM Agent already installed"
+    return
+  fi
+  
+  # Install SSM agent
+  curl -s "https://s3.${region}.amazonaws.com/amazon-ssm-agent/latest/linux_amd64/amazon-ssm-agent.rpm" -o /tmp/amazon-ssm-agent.rpm
+  
+  # Convert rpm to deb and install
+  apt-get install -y alien
+  alien -i /tmp/amazon-ssm-agent.rpm || {
+    # Fallback: download deb directly
+    wget -s "https://s3.${region}.amazonaws.com/amazon-ssm-agent/latest/debian_amd64/amazon-ssm-agent.deb" -O /tmp/amazon-ssm-agent.deb
+    dpkg -i /tmp/amazon-ssm-agent.deb
+  }
+  
+  # Enable and start
+  systemctl enable amazon-ssm-agent
+  systemctl start amazon-ssm-agent
+  
+  log "SSM Agent installed successfully"
+}
+
 create_volumes() {
   log "Creating Caddy persistence directories..."
   mkdir -p /data/caddy /config/caddy
@@ -130,10 +157,29 @@ write_container_env_vars() {
   fi
 }
 
+fetch_image_tag() {
+  log "Fetching image tag from SSM..."
+  
+  IMAGE_TAG=$(aws ssm get-parameter \
+    --name "/app/$${environment}/backend/IMAGE_TAG" \
+    --region $${region} \
+    --query Parameter.Value \
+    --output text 2>/dev/null || echo "latest")
+  
+  if [ -z "$IMAGE_TAG" ]; then
+    IMAGE_TAG="latest"
+  fi
+  
+  log "Using image tag: $IMAGE_TAG"
+  echo "$IMAGE_TAG"
+}
+
 start_backend_service() {
   log "Starting backend service..."
   
-  docker pull ghcr.io/bit-apps-pro/paymentform-backend:latest
+  IMAGE_TAG=$(fetch_image_tag)
+  
+  docker pull ghcr.io/bit-apps-pro/paymentform-backend:$${IMAGE_TAG}
   
   CONTAINER_ENV_FLAGS=""
   if [ -f /etc/container_env ]; then
@@ -141,6 +187,9 @@ start_backend_service() {
       CONTAINER_ENV_FLAGS="$${CONTAINER_ENV_FLAGS} -e $${key}=$${value}"
     done < /etc/container_env
   fi
+  
+  docker stop paymentform-backend 2>/dev/null || true
+  docker rm paymentform-backend 2>/dev/null || true
   
   docker run -d \
     --name paymentform-backend \
@@ -153,7 +202,7 @@ start_backend_service() {
     -p 443:443 \
     -v /data/caddy:/data/caddy \
     -v /config/caddy:/config/caddy \
-    ghcr.io/bit-apps-pro/paymentform-backend:latest
+    ghcr.io/bit-apps-pro/paymentform-backend:$${IMAGE_TAG}
   
   log "Backend container started"
 }
@@ -161,7 +210,12 @@ start_backend_service() {
 start_renderer_service() {
   log "Starting renderer service..."
   
-  docker pull ghcr.io/bit-apps-pro/paymentform-renderer:latest
+  IMAGE_TAG=$(fetch_image_tag)
+  
+  docker pull ghcr.io/bit-apps-pro/paymentform-renderer:$${IMAGE_TAG}
+  
+  docker stop paymentform-renderer 2>/dev/null || true
+  docker rm paymentform-renderer 2>/dev/null || true
   
   docker run -d \
     --name paymentform-renderer \
@@ -173,7 +227,7 @@ start_renderer_service() {
     -p 443:443 \
     -v /data/caddy:/data/caddy \
     -v /config/caddy:/config/caddy \
-    ghcr.io/bit-apps-pro/paymentform-renderer:latest
+    ghcr.io/bit-apps-pro/paymentform-renderer:$${IMAGE_TAG}
   
   log "Renderer container started"
 }
@@ -184,6 +238,7 @@ main() {
   configure_ecs
   install_pgbouncer
   install_docker
+  install_ssm_agent
   create_volumes
   authenticate_ghcr
   fetch_ssm_parameters

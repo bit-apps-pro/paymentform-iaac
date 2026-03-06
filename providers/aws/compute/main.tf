@@ -258,3 +258,17 @@ data "aws_instances" "compute" {
 
   depends_on = [aws_autoscaling_group.compute]
 }
+
+# SSM Parameter for Container Image Tag
+resource "aws_ssm_parameter" "image_tag" {
+  name  = "/app/${var.environment}/backend/IMAGE_TAG"
+  type  = "String"
+  value = var.container_image_tag
+
+  tags = merge(
+    var.standard_tags,
+    {
+      Name = "${local.prefix}-image-tag"
+    }
+  )
+}

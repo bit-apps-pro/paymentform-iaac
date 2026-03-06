@@ -78,6 +78,7 @@ module "aws_compute_backend" {
   region                     = "us-east-1"
   bucket_name                = module.cloudflare_r2.application_storage_bucket_name
   service_type               = "backend"
+  container_image_tag        = "latest"
 
   container_env_vars = {
     APP_NAME          = "Payment Form"

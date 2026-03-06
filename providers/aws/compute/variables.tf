@@ -151,3 +151,9 @@ variable "db_password" {
   sensitive   = true
   default     = ""
 }
+
+variable "container_image_tag" {
+  description = "Container image tag to deploy (e.g., latest, v1.2.3, dev-abc123)"
+  type        = string
+  default     = "latest"
+}

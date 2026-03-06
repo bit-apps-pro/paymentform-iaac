@@ -34,6 +34,11 @@ variable "client_container_image" {
   default = "ghcr.io/your-org/paymentform-client:latest"
 }
 
+variable "backend_container_image" {
+  type    = string
+  default = "ghcr.io/your-org/paymentform-backend:latest"
+}
+
 variable "renderer_container_image" {
   type    = string
   default = "ghcr.io/your-org/paymentform-renderer:latest"
