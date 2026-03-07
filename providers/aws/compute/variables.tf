@@ -157,3 +157,9 @@ variable "container_image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "alb_target_group_arn" {
+  description = "ARN of the ALB target group to attach ASG instances to"
+  type        = string
+  default     = ""
+}

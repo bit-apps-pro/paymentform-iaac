@@ -1,0 +1,64 @@
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'prod-us'
+        type: choice
+        options:
+          - prod-us
+          - prod-eu
+          - prod-au
+          - dev
+      backend_image:
+        description: 'Backend image tag'
+        required: false
+        default: 'latest'
+      client_image:
+        description: 'Client image tag'
+        required: false
+        default: 'latest'
+      renderer_image:
+        description: 'Renderer image tag'
+        required: false
+        default: 'latest'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+
+      - name: Initialize OpenTofu
+        run: |
+          cd iaac/environments/${{ github.inputs.environment }}
+          tofu init
+
+      - name: Deploy Infrastructure
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd iaac/environments/${{ github.inputs.environment }}
+          tofu apply \
+            -var="backend_container_image=ghcr.io/bit-apps-pro/paymentform-backend:${{ github.inputs.backend_image }}" \
+            -var="client_container_image=ghcr.io/bit-apps-pro/paymentform-client:${{ github.inputs.client_image }}" \
+            -var="renderer_container_image=ghcr.io/bit-apps-pro/paymentform-renderer:${{ github.inputs.renderer_image }}" \
+            -auto-approve

@@ -249,6 +249,15 @@ resource "aws_autoscaling_policy" "scale_down" {
   cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.compute.name
 }
+
+# ALB Target Group Attachment (if ALB is configured)
+resource "aws_autoscaling_group_attachment" "alb_attachment" {
+  count = var.alb_target_group_arn != "" ? 1 : 0
+
+  autoscaling_group_name = aws_autoscaling_group.compute.name
+  target_group_arn       = var.alb_target_group_arn
+}
+
 # Data source to get instance IPs from ASG
 data "aws_instances" "compute" {
   filter {

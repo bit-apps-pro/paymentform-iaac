@@ -214,3 +214,32 @@ variable "replica_vpc_id" {
   type        = string
   default     = ""
 }
+
+# =============================================================================
+# Dynamic Volumes Configuration
+# =============================================================================
+variable "volumes" {
+  description = "List of volumes to create and attach dynamically"
+  type = list(object({
+    name               = string
+    availability_zone  = string
+    size               = number
+    volume_type        = string
+    encrypted          = bool
+    iops               = number
+    throughput         = number
+    device_name        = string
+    instance_id        = string
+    prevent_destroy    = bool
+  }))
+  default = []
+}
+
+# =============================================================================
+# Pre-created Volume IDs (to attach to instances)
+# =============================================================================
+variable "volume_ids" {
+  description = "Map of volume names to volume IDs for attaching to instances"
+  type        = map(string)
+  default     = {}
+}

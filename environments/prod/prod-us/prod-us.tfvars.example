@@ -1,0 +1,167 @@
+# ============================================================================
+# Production US Region - Terraform Variables
+# ============================================================================
+# Copy this file to prod-us.tfvars and fill in your actual values
+# Usage: tofu plan -var-file="prod-us.tfvars"
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Common - Domain & Environment
+# ----------------------------------------------------------------------------
+environment = "production"
+
+# ----------------------------------------------------------------------------
+# Backend Service (from backend/.env.example)
+# ----------------------------------------------------------------------------
+backend_container_image = "ghcr.io/bit-apps-pro/paymentform-backend:latest"
+
+# App Configuration
+app_key   = "base64:lJsvvtNdO1BMfsTI6xm/8X5yNs+jM6wk2uCaZ+9pfh0="
+app_debug = "false"
+
+# Database
+db_database = "shopper_backend"
+db_username = "postgres"
+db_password = "YOUR_DB_PASSWORD"
+
+# Tenant Database (Turso)
+tenant_db_auth_token     = "YOUR_TENANT_DB_AUTH_TOKEN"
+tenant_db_encryption_key = "YOUR_TENANT_DB_ENCRYPTION_KEY"
+turso_org_slug           = "your-turso-org-slug"
+
+# Redis/Valkey
+redis_password = "YOUR_REDIS_PASSWORD"
+
+# Session
+session_driver   = "database"
+session_lifetime = 120
+session_encrypt  = "false"
+
+# Queue & Cache
+queue_connection = "database"
+cache_store      = "database"
+
+# Mail
+mail_mailer       = "smtp"
+mail_host         = "smtp.mailgun.org"
+mail_port         = "587"
+mail_from_address = "hello@paymentform.io"
+mail_from_name    = "Payment Form"
+mail_password     = "YOUR_SMTP_PASSWORD"
+
+# AWS/S3/R2
+aws_access_key_id     = "YOUR_AWS_ACCESS_KEY_ID"
+aws_secret_access_key = "YOUR_AWS_SECRET_ACCESS_KEY"
+aws_default_region    = "us-east-1"
+aws_bucket            = "paymentform-uploads"
+
+# CORS
+cors_allowed_origins = "https://app.paymentform.io"
+cors_allowed_methods = "POST, GET, OPTIONS, PUT, DELETE"
+cors_allowed_headers = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin,X-Tenant"
+cors_exposed_headers = "Content-Disposition"
+
+# Sanctum
+sanctum_stateful_domains = ".paymentform.io"
+session_domain           = ".paymentform.io"
+
+# Google OAuth
+google_client_id     = "your-google-client-id.apps.googleusercontent.com"
+google_client_secret = "YOUR_GOOGLE_CLIENT_SECRET"
+
+# Stripe
+stripe_public_key             = "pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+stripe_secret                 = "sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+stripe_client_id              = "ca_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+stripe_connect_webhook_secret = "whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# KV Store
+kv_store_api_token = "YOUR_KV_STORE_API_TOKEN"
+
+# Mollie
+mollie_allowed_ips = ""
+
+# ----------------------------------------------------------------------------
+# Client Service (from client/.env.development)
+# ----------------------------------------------------------------------------
+client_container_image = "ghcr.io/bit-apps-pro/paymentform-client:latest"
+
+# Client Environment Variables
+# NEXT_PUBLIC_API_URL - set automatically from ALB
+# NEXT_PUBLIC_DOMAIN - set automatically
+# NEXT_PUBLIC_COOKIE_DOMAIN - set automatically
+
+# ----------------------------------------------------------------------------
+# Renderer Service (from renderer/.env.development)
+# ----------------------------------------------------------------------------
+renderer_container_image = "ghcr.io/bit-apps-pro/paymentform-renderer:latest"
+
+# Renderer Environment Variables
+# KV_STORE_BASE_URL - set automatically from module
+# KV_STORE_API_TOKEN - set from var.kv_store_api_token
+
+# Caddy Configuration (for SSL)
+caddy_api_token = "YOUR_CADDY_API_TOKEN"
+caddy_log_level = "info"
+
+# ----------------------------------------------------------------------------
+# PostgreSQL Configuration
+# ----------------------------------------------------------------------------
+postgres_ami_id = ""
+
+# ----------------------------------------------------------------------------
+# Valkey Configuration
+# ----------------------------------------------------------------------------
+valkey_ami_id = ""
+
+# ----------------------------------------------------------------------------
+# R2 Storage Configuration
+# ----------------------------------------------------------------------------
+r2_backup_bucket_name    = "prod-paymentform-backups"
+r2_ssl_access_key_id     = "YOUR_R2_SSL_ACCESS_KEY"
+r2_ssl_secret_access_key = "YOUR_R2_SSL_SECRET_KEY"
+r2_backup_access_key     = "YOUR_R2_BACKUP_ACCESS_KEY"
+r2_backup_secret_key     = "YOUR_R2_BACKUP_SECRET_KEY"
+
+# ----------------------------------------------------------------------------
+# pgBackrest Configuration
+# ----------------------------------------------------------------------------
+pgbackrest_cipher_pass = "YOUR_PGBACKREST_CIPHER_PASSWORD"
+
+# ----------------------------------------------------------------------------
+# Cloudflare Configuration
+# ----------------------------------------------------------------------------
+cloudflare_api_email  = "your@email.com"
+cloudflare_api_token  = "YOUR_CLOUDFLARE_API_TOKEN"
+cloudflare_account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+cloudflare_zone_id    = "YOUR_CLOUDFLARE_ZONE_ID"
+
+# ----------------------------------------------------------------------------
+# GitHub Container Registry
+# ----------------------------------------------------------------------------
+ghcr_username = "your-github-username"
+ghcr_token    = "ghp_YOUR_GITHUB_TOKEN"
+
+# ----------------------------------------------------------------------------
+# Cross-Region Read Replicas (Optional)
+# ----------------------------------------------------------------------------
+# db_read_replica_endpoints = []
+
+# ----------------------------------------------------------------------------
+# Cost Optimization Variables (Optional)
+# ----------------------------------------------------------------------------
+# detailed_monitoring = false        # Save ~$4.20/month
+# on_demand_percentage = 30         # 70% spot / 30% on-demand
+
+# ----------------------------------------------------------------------------
+# Notes
+# ----------------------------------------------------------------------------
+# Sensitive variables in this file are for reference only.
+# For production, use environment variables (TF_VAR_xxx)
+#
+# Example:
+#   export TF_VAR_db_password="your-password"
+#   export TF_VAR_app_key="base64:xxx"
+#   export TF_VAR_redis_password="your-password"
+#
+# ============================================================================

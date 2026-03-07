@@ -67,3 +67,9 @@ variable "cross_region_vpc_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "alb_security_group_id" {
+  description = "ALB security group ID to allow traffic from (for ALB → EC2 communication)"
+  type        = string
+  default     = ""
+}

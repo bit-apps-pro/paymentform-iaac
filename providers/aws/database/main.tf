@@ -9,6 +9,12 @@ terraform {
 
 locals {
   prefix = var.environment
+
+  # Build volume configurations dynamically from var.volumes
+  volumes = { for idx, vol in var.volumes : vol.name => vol }
+
+  # Determine if we should create volumes or use pre-created ones
+  use_external_volumes = length(var.volume_ids) > 0
 }
 
 # EIP for PostgreSQL Primary (stable IP for failover)
@@ -31,29 +37,40 @@ resource "aws_eip_association" "primary" {
   allocation_id = aws_eip.primary[0].id
 }
 
-# Separate data volume for PostgreSQL (allows resizing)
-resource "aws_ebs_volume" "primary_data" {
-  availability_zone = var.availability_zone
-  size              = var.primary_data_volume_size
-  type              = var.volume_type
-  encrypted         = true
+# Dynamic volume creation (only if volume_ids not provided)
+module "volumes" {
+  source = "../../volume"
 
-  lifecycle {
-    prevent_destroy = false
-  }
+  for_each = local.use_external_volumes ? {} : local.volumes
 
-  tags = merge(
-    var.standard_tags,
-    {
-      Name = "${local.prefix}-postgresql-data"
-    }
-  )
+  environment        = var.environment
+  name               = each.value.name
+  availability_zone  = each.value.availability_zone
+  size               = each.value.size
+  volume_type        = each.value.volume_type
+  encrypted          = each.value.encrypted
+  iops               = each.value.iops
+  throughput         = each.value.throughput
+  device_name        = each.value.device_name
+  instance_id        = ""
+  standard_tags      = var.standard_tags
+  prevent_destroy    = each.value.prevent_destroy
 }
 
-resource "aws_volume_attachment" "primary_data_attachment" {
+# Volume attachments - primary data volume
+resource "aws_volume_attachment" "primary_data" {
+  count    = try(length([for v in var.volumes : v if v.name == "postgresql-primary-data"]), 0) > 0 || lookup(var.volume_ids, "postgresql-primary-data", "") != "" ? 1 : 0
   device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.primary_data.id
+  volume_id   = local.use_external_volumes ? var.volume_ids["postgresql-primary-data"] : module.volumes["postgresql-primary-data"].volume_id
   instance_id = aws_instance.postgresql_primary.id
+}
+
+# Volume attachments - replica data volume
+resource "aws_volume_attachment" "replica_data" {
+  count    = var.enable_replica ? (try(length([for v in var.volumes : v if v.name == "postgresql-replica-data"]), 0) > 0 || lookup(var.volume_ids, "postgresql-replica-data", "") != "" ? 1 : 0) : 0
+  device_name = "/dev/sdf"
+  volume_id   = local.use_external_volumes ? var.volume_ids["postgresql-replica-data"] : module.volumes["postgresql-replica-data"].volume_id
+  instance_id = aws_instance.postgresql_replica[0].id
 }
 
 # EC2 Instance for PostgreSQL Primary
@@ -99,34 +116,7 @@ resource "aws_instance" "postgresql_primary" {
     data_volume_device     = "/dev/sdf"
   }))
 
-  depends_on = [aws_volume_attachment.primary_data_attachment]
-}
-
-# Separate data volume for PostgreSQL Replica
-resource "aws_ebs_volume" "replica_data" {
-  count             = var.enable_replica ? 1 : 0
-  availability_zone = var.replica_availability_zone
-  size              = var.replica_data_volume_size
-  type              = var.volume_type
-  encrypted         = true
-
-  lifecycle {
-    prevent_destroy = false
-  }
-
-  tags = merge(
-    var.standard_tags,
-    {
-      Name = "${local.prefix}-postgresql-replica-data"
-    }
-  )
-}
-
-resource "aws_volume_attachment" "replica_data_attachment" {
-  count    = var.enable_replica ? 1 : 0
-  device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.replica_data[0].id
-  instance_id = aws_instance.postgresql_replica[0].id
+  depends_on = [aws_volume_attachment.primary_data]
 }
 
 # EC2 Instance for PostgreSQL Replica
@@ -165,7 +155,7 @@ resource "aws_instance" "postgresql_replica" {
     data_volume_device  = "/dev/sdf"
   }))
 
-  depends_on = [aws_volume_attachment.replica_data_attachment]
+  depends_on = [aws_instance.postgresql_primary, aws_volume_attachment.replica_data]
 }
 
 # IAM Role for EC2 to access S3/R2 for pgbackrest
@@ -224,29 +214,6 @@ resource "aws_iam_role_policy_attachment" "pgbackrest_s3_attachment" {
   policy_arn = aws_iam_policy.pgbackrest_s3_access.arn
 }
 
-# Cross-region Replica Data Volume
-resource "aws_ebs_volume" "cross_region_data" {
-  count                = var.enable_cross_region_replica ? 1 : 0
-  availability_zone   = var.cross_region_availability_zone
-  size                = var.replica_data_volume_size
-  type                = var.volume_type
-  encrypted           = true
-
-  tags = merge(
-    var.standard_tags,
-    {
-      Name = "${local.prefix}-postgresql-cross-region-data"
-    }
-  )
-}
-
-resource "aws_volume_attachment" "cross_region_data_attachment" {
-  count       = var.enable_cross_region_replica ? 1 : 0
-  device_name = "/dev/sdf"
-  volume_id   = aws_ebs_volume.cross_region_data[0].id
-  instance_id = aws_instance.postgresql_cross_region_replica[0].id
-}
-
 # Cross-region Read Replica
 resource "aws_instance" "postgresql_cross_region_replica" {
   count                = var.enable_cross_region_replica ? 1 : 0
@@ -282,4 +249,17 @@ resource "aws_instance" "postgresql_cross_region_replica" {
   }))
 
   depends_on = [aws_instance.postgresql_primary]
+}
+
+# Outputs
+output "primary_instance_id" {
+  value = aws_instance.postgresql_primary.id
+}
+
+output "replica_instance_id" {
+  value = aws_instance.postgresql_replica[*].id
+}
+
+output "volume_ids" {
+  value = local.use_external_volumes ? var.volume_ids : { for k, v in module.volumes : k => v.volume_id }
 }
