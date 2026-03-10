@@ -1,0 +1,13 @@
+name = "paymentform-prod-us-renderer"
+account_id = "ea02b48f1eb574dd1be19c5766424c81"
+main = "worker.js"
+compatibility_date = "2026-03-09"
+
+[[containers]]
+class_name = "AppRenderer"
+image = "ghcr.io/bit-apps-pro/paymentform-renderer:0.0.1"
+instance_type = "basic"
+max_instances = 3
+
+[env.prod-us]
+vars = { ENVIRONMENT = "prod-us" }

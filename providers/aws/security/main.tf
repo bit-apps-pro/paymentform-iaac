@@ -54,16 +54,16 @@ resource "aws_security_group_rule" "ecs_ingress_from_alb" {
   description              = "Allow HTTP/HTTPS from ALB"
 }
 
-# Additional inbound rules for application ports
+# Additional inbound rules for application ports - only from itself (for pgbouncer)
 resource "aws_security_group_rule" "ecs_ingress_app_ports" {
   count             = length(var.app_ports) > 0 ? length(var.app_ports) : 0
   type              = "ingress"
   from_port         = var.app_ports[count.index]
   to_port           = var.app_ports[count.index]
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"] # Internal/dev ports; restrict in prod
-  security_group_id = aws_security_group.ecs.id
-  description       = "Allow traffic on app port ${var.app_ports[count.index]}"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = aws_security_group.ecs.id
+  description       = "Allow traffic on app port ${var.app_ports[count.index]} from ECS"
 }
 
 # Outbound rules for EC2/Traefik

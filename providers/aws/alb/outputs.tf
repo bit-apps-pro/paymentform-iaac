@@ -23,6 +23,11 @@ output "target_group_arn" {
   value       = aws_lb_target_group.main.arn
 }
 
+output "renderer_target_group_arn" {
+  description = "ARN of the renderer target group"
+  value       = aws_lb_target_group.renderer.arn
+}
+
 output "security_group_id" {
   description = "ID of the ALB security group"
   value       = aws_security_group.alb.id

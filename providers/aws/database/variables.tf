@@ -2,6 +2,10 @@ variable "environment" {
   description = "Environment name (dev, sandbox, prod)"
   type        = string
 }
+variable "name" {
+  description = "Instance name prefix for resources"
+  type        = string
+}
 
 variable "standard_tags" {
   description = "Standard tags to apply to all resources"

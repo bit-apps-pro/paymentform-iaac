@@ -29,12 +29,13 @@ resource "aws_launch_template" "compute" {
   user_data = base64encode(templatefile("${path.module}/userdata.sh", {
     ecs_cluster_name   = var.ecs_cluster_name
     environment        = var.environment
+    ghcr_username      = var.ghcr_username
     region             = var.region
     bucket_name        = var.bucket_name
     service_type       = var.service_type
-    container_env_vars = var.container_env_vars
+    container_env_vars = join("\n", [for k, v in var.container_env_vars : "${k}=${v}" if v != null])
     enable_pgbouncer   = var.enable_pgbouncer
-    db_host            = var.db_read_replica_hosts != [] ? var.db_read_replica_hosts[0] : ""
+    db_host            = length(var.db_read_replica_hosts) > 0 ? var.db_read_replica_hosts[0] : "localhost"
     db_name            = var.db_name
     db_password        = var.db_password
   }))
@@ -151,7 +152,7 @@ resource "aws_iam_role" "ecs_instance_role" {
   )
 
   lifecycle {
-    prevent_destroy = true
+    # prevent_destroy = true
   }
 }
 
@@ -182,7 +183,7 @@ resource "aws_iam_policy" "ssm_get_parameters" {
           "ssm:GetParametersByPath"
         ]
         Effect   = "Allow"
-        Resource = "arn:aws:ssm:${var.region}:*:parameter/app/${var.environment}/backend/*"
+        Resource = "arn:aws:ssm:${var.region}:*:parameter/paymentform/${var.environment}/backend/*"
       }
     ]
   })
@@ -265,10 +266,10 @@ data "aws_instances" "compute" {
 }
 
 # SSM Parameter for Container Image Tag
-resource "aws_ssm_parameter" "image_tag" {
-  name  = "/app/${var.environment}/backend/IMAGE_TAG"
+resource "aws_ssm_parameter" "image" {
+  name  = "/paymentform/${var.environment}/backend/IMAGE"
   type  = "String"
-  value = var.container_image_tag
+  value = var.container_image
 
   tags = merge(
     var.standard_tags,
@@ -277,3 +278,4 @@ resource "aws_ssm_parameter" "image_tag" {
     }
   )
 }
+

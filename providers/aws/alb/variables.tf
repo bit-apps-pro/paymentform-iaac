@@ -2,6 +2,10 @@ variable "environment" {
   description = "Environment name (dev, sandbox, prod)"
   type        = string
 }
+variable "name" {
+  description = "Instance name prefix for resources"
+  type        = string
+}
 
 variable "vpc_id" {
   description = "VPC ID where ALB will be created"
@@ -39,6 +43,12 @@ variable "enable_deletion_protection" {
 
 variable "ssl_certificate_arn" {
   description = "SSL certificate ARN for HTTPS listener"
+  type        = string
+  default     = ""
+}
+
+variable "api_hostname" {
+  description = "Hostname for API backend (e.g., api.paymentform.io)"
   type        = string
   default     = ""
 }

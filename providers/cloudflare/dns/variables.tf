@@ -59,6 +59,11 @@ variable "renderer_subdomain" {
 }
 
 # Origin Configuration
+variable "api_cname" {
+  description = "ALB DNS name for API backend (used if not using IP-based origin)"
+  type        = string
+  default     = ""
+}
 variable "api_origin_ips" {
   description = "List of origin IPs for API backend"
   type        = list(string)
@@ -97,11 +102,6 @@ variable "cloudflare_plan" {
   default     = "free"
 }
 
-variable "enable_load_balancer" {
-  description = "Enable Cloudflare Load Balancer"
-  type        = bool
-  default     = false
-}
 
 variable "enable_waf" {
   description = "Enable Web Application Firewall"

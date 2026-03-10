@@ -17,9 +17,11 @@ provider "cloudflare" {
 }
 
 locals {
-  full_container_name = "${var.resource_prefix}-${var.container_name}"
-  class_name          = "App${title(var.container_name)}"
-  binding_name        = "APP_${upper(var.container_name)}"
+  full_container_name    = "${var.resource_prefix}-${var.container_name}"
+  class_name             = "App${title(var.container_name)}"
+  binding_name           = "APP_${upper(var.container_name)}"
+  container_env_vars_str = join(", ", [for k, v in var.container_env_vars : "${k}=\"${v}\"" if v != null])
+  image                  = element(split("/", var.container_image), length(split("/", var.container_image)) - 1)
 }
 
 # DNS Record for Container
@@ -50,14 +52,13 @@ resource "terraform_data" "deploy_container" {
   provisioner "local-exec" {
     command = <<-EOT
       cd ${path.module} && \
-      sed -i 's/^name = .*/name = "${local.full_container_name}"/' wrangler.toml && \
-      sed -i 's/^class_name = .*/class_name = "${local.class_name}"/' wrangler.toml && \
-      sed -i 's/^image = .*/image = "${var.container_image}"/' wrangler.toml && \
-      sed -i 's/^max_instances = .*/max_instances = ${var.instance_max_count}/' wrangler.toml && \
-      sed -i 's/^port = .*/port = ${var.container_port}/' wrangler.toml && \
-      sed -i 's/^name = .*/name = "${local.binding_name}"/' wrangler.toml && \
-      sed -i 's/^class_name = .*/class_name = "${local.class_name}"/' wrangler.toml && \
-      wrangler deploy --env ${var.environment} --account-id ${var.cloudflare_account_id}
+      sed -i 's#^image = .*#image = "${var.container_image}"#' wrangler.toml && \
+      sed -i 's#^max_instances = .*#max_instances = ${var.instance_max_count}#' wrangler.toml && \
+      sed -i 's#^vars = .*#vars = {${local.container_env_vars_str}}#' wrangler.toml && \
+      docker pull "ghcr.io/bit-apps-pro/${local.image}" && \
+      docker tag "ghcr.io/bit-apps-pro/${local.image}" "${local.image}" && \
+      wrangler containers push "${local.image}" && \
+      wrangler deploy --env ${var.environment}
     EOT
 
     environment = merge(var.container_env_vars, {

@@ -8,7 +8,7 @@ terraform {
 }
 
 locals {
-  prefix = var.environment
+  prefix = var.name
 
   # Build volume configurations dynamically from var.volumes
   volumes = { for idx, vol in var.volumes : vol.name => vol }

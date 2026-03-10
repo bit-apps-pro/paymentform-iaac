@@ -57,3 +57,8 @@ output "instance_ips" {
   description = "List of EC2 instance public/private IP addresses"
   value       = data.aws_instances.compute.public_ips != [] ? data.aws_instances.compute.public_ips : data.aws_instances.compute.private_ips
 }
+
+output "instance_ids" {
+  description = "List of EC2 instance IDs"
+  value       = data.aws_instances.compute.ids
+}

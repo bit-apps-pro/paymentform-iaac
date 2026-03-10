@@ -36,6 +36,17 @@ locals {
   }
 }
 
+resource "aws_ssm_parameter" "ghcr_token" {
+  name        = "/paymentform/prod-us/backend/GHCR_TOKEN"
+  description = "GitHub Container Registry token for Docker image pull"
+  type        = "SecureString"
+  value       = var.ghcr_token
+  overwrite   = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
 # =============================================================================
 # Networking (Shared)
 # =============================================================================
@@ -60,7 +71,7 @@ module "paymentform_security" {
 
   environment            = "prod-us"
   vpc_id                 = module.paymentform_networking.vpc_id
-  app_ports              = [80, 443, 8000, 3000]
+  app_ports              = [80, 443]
   enable_strict_security = true
   standard_tags          = local.standard_tags
   alb_security_group_id  = module.paymentform_alb.security_group_id
@@ -104,7 +115,7 @@ module "postgres_primary_volume" {
   source = "../../../providers/aws/volume/postgres-primary"
 
   environment       = "prod-us"
-  name              = "data"
+  name              = "${local.resource_prefix}-database-primary"
   availability_zone = "${local.region}a"
   size              = 50
   volume_type       = "gp3"
@@ -121,7 +132,7 @@ module "postgres_replica_volume" {
   source = "../../../providers/aws/volume/postgres-replica"
 
   environment       = "prod-us"
-  name              = "data"
+  name              = "${local.resource_prefix}-database-replica"
   availability_zone = "${local.region}b"
   size              = 30
   volume_type       = "gp3"
@@ -144,13 +155,14 @@ module "postgres_database" {
   ]
 
   environment       = "prod-us"
+  name              = "${local.resource_prefix}-database"
   ami_id            = var.postgres_ami_id
   subnet_ids        = module.paymentform_networking.public_subnet_ids
   security_group_id = module.paymentform_security.postgresql_security_group_id
 
   primary_instance_type = "t4g.small"
   replica_instance_type = "t4g.micro"
-  primary_volume_size   = 50
+  primary_volume_size   = 30
   replica_volume_size   = 30
   volume_type           = "gp3"
 
@@ -186,8 +198,8 @@ module "paymentform_cache" {
   subnet_ids        = module.paymentform_networking.public_subnet_ids
   security_group_id = module.paymentform_security.valkey_security_group_id
 
-  instance_type = "t4g.micro"
-  node_count    = 2
+  instance_type = "t4g.small"
+  node_count    = 1
   volume_size   = 20
   volume_type   = "gp3"
 
@@ -206,14 +218,14 @@ module "paymentform_backend" {
   ]
 
   environment                = "prod-us"
-  instance_prefix            = "prod-us-backend"
+  instance_prefix            = "${local.resource_prefix}-backend"
   subnet_ids                 = module.paymentform_networking.public_subnet_ids
   instance_type              = "t4g.small"
-  ami_id                     = "ami-01a1b1a4d93797ddc"
+  ami_id                     = "ami-04e70591d54b84a4c"
   key_pair_name              = ""
   min_size                   = 1
   max_size                   = 4
-  desired_capacity           = 2
+  desired_capacity           = 1
   scaling_cpu_threshold      = 70
   scaling_down_cpu_threshold = 30
   standard_tags              = local.standard_tags
@@ -221,15 +233,16 @@ module "paymentform_backend" {
   ebs_optimized              = true
   root_volume_size           = 50
   root_volume_type           = "gp3"
-  ecs_cluster_name           = "paymentform-cluster-prod-us"
+  ecs_cluster_name           = "${local.resource_prefix}-cluster"
   ecs_security_group_id      = module.paymentform_security.ecs_security_group_id
   region                     = local.region
   bucket_name                = module.paymentform_storage_application.bucket_name
   service_type               = "backend"
   enable_pgbouncer           = true
   db_name                    = var.db_database
+  ghcr_username              = var.ghcr_username
   db_password                = var.db_password
-  container_image_tag        = var.backend_container_image
+  container_image            = var.backend_container_image
   alb_target_group_arn       = module.paymentform_alb.target_group_arn
   db_read_replica_hosts = concat(
     [module.postgres_database.primary_endpoint],
@@ -258,6 +271,8 @@ module "paymentform_backend" {
 
     DB_CONNECTION = "pgsql"
     DB_HOST       = "127.0.0.1"
+    DB_HOST_WRITE = "127.0.0.1"
+    DB_HOST_READ  = length(var.db_read_replica_endpoints) > 0 ? var.db_read_replica_endpoints[0] : module.postgres_database.primary_endpoint
     DB_PORT       = 6432
     DB_DATABASE   = var.db_database
     DB_USERNAME   = var.db_username
@@ -274,7 +289,7 @@ module "paymentform_backend" {
     SESSION_PATH     = "/"
     SESSION_DOMAIN   = null
 
-    BROADCAST_CONNECTION = "log"
+    BROADCAST_CONNECTION = "redis"
     FILESYSTEM_DISK      = "local"
     QUEUE_CONNECTION     = "redis"
     CACHE_STORE          = "redis"
@@ -324,13 +339,63 @@ module "paymentform_backend" {
   }
 }
 
+module "paymentform_renderer" {
+  source = "../../../providers/aws/compute"
+
+  depends_on = [
+    module.paymentform_alb,
+    module.paymentform_security
+  ]
+
+  environment                = "prod-us"
+  instance_prefix            = "${local.resource_prefix}-renderer"
+  subnet_ids                 = module.paymentform_networking.public_subnet_ids
+  instance_type              = "t4g.small"
+  ami_id                     = "ami-04e70591d54b84a4c"
+  key_pair_name              = ""
+  min_size                   = 1
+  max_size                   = 4
+  desired_capacity           = 1
+  scaling_cpu_threshold      = 70
+  scaling_down_cpu_threshold = 30
+  standard_tags              = local.standard_tags
+  detailed_monitoring        = true
+  ebs_optimized              = true
+  root_volume_size           = 50
+  root_volume_type           = "gp3"
+  ecs_cluster_name           = "${local.resource_prefix}-cluster"
+  ecs_security_group_id      = module.paymentform_security.ecs_security_group_id
+  region                     = local.region
+  bucket_name                = module.paymentform_storage_application.bucket_name
+  service_type               = "renderer"
+  enable_pgbouncer           = false
+  ghcr_username              = var.ghcr_username
+  container_image            = var.renderer_container_image
+  alb_target_group_arn       = module.paymentform_alb.renderer_target_group_arn
+
+  container_env_vars = {
+    R2_SSL_BUCKET_NAME       = module.paymentform_storage_ssl_config.bucket_name
+    R2_SSL_ENDPOINT          = module.paymentform_storage_ssl_config.bucket_domain
+    R2_SSL_ACCESS_KEY_ID     = var.r2_ssl_access_key_id
+    R2_SSL_SECRET_ACCESS_KEY = var.r2_ssl_secret_access_key
+    API_URL                  = "https://api.paymentform.io"
+    DOMAIN                   = "https://app.paymentform.io"
+    KV_STORE_BASE_URL        = module.paymentform_kv_store.api_endpoint
+    KV_STORE_NAMESPACE_ID    = module.paymentform_kv_store.namespace_id
+    KV_STORE_API_TOKEN       = var.kv_store_api_token
+    STRIPE_KEY               = var.stripe_public_key
+    RESERVED_SUBDOMAINS      = "www,admin,api,app,dev,test"
+    NODE_ENV                 = "production"
+  }
+}
+
 module "paymentform_storage_application" {
   source = "../../../providers/cloudflare/r2/application-storage"
 
   environment           = "prod-us"
   cloudflare_account_id = var.cloudflare_account_id
   cloudflare_api_token  = var.cloudflare_api_token
-  r2_bucket_name        = "paymentform-uploads"
+  r2_bucket_name        = "${local.resource_prefix}-uploads"
 }
 
 module "paymentform_storage_ssl_config" {
@@ -339,7 +404,7 @@ module "paymentform_storage_ssl_config" {
   environment           = "prod-us"
   cloudflare_account_id = var.cloudflare_account_id
   cloudflare_api_token  = var.cloudflare_api_token
-  r2_bucket_name        = "paymentform-ssl-config"
+  r2_bucket_name        = "${local.resource_prefix}-ssl-config"
   enabled               = true
 }
 
@@ -373,51 +438,81 @@ module "paymentform_kv_store" {
 module "paymentform_alb" {
   source = "../../../providers/aws/alb"
 
-  environment = "paymentform-prod-us"
+  environment = "prod-us"
+  name        = "${local.resource_prefix}-alb"
   vpc_id      = module.paymentform_networking.vpc_id
   subnet_ids  = module.paymentform_networking.public_subnet_ids
 
   target_port                = 80
   health_check_path          = "/health"
   enable_deletion_protection = true
+  api_hostname               = "api.paymentform.io"
 
   standard_tags = local.standard_tags
 }
 
-output "region" {
-  value = local.region
+module "paymentform_client" {
+  source = "../../../providers/cloudflare/containers"
+
+  environment           = "prod-us"
+  resource_prefix       = local.resource_prefix
+  standard_tags         = local.standard_tags
+  cloudflare_account_id = var.cloudflare_account_id
+  cloudflare_api_token  = var.cloudflare_api_token
+  cloudflare_zone_id    = var.cloudflare_zone_id
+
+  container_name    = "client"
+  container_image   = var.client_container_image
+  container_enabled = true
+
+  domain_name    = "app.paymentform.io"
+  domain_proxied = true
+
+  deployment_cpu       = "0.5"
+  deployment_memory_mb = 512
+  instance_min_count   = 1
+
+  container_env_vars = {
+    API_URL         = "https://api.paymentform.io"
+    DOMAIN          = "https://app.paymentform.io"
+    COOKIE_DOMAIN   = ".paymentform.io"
+    FORM_RENDER_URL = "https://renderer.paymentform.io/"
+    STRIPE_KEY      = var.stripe_public_key
+    NODE_ENV        = "production"
+  }
+
+  registry_url      = "ghcr.io"
+  registry_username = var.ghcr_username
+  registry_password = var.ghcr_token
 }
 
-output "alb_dns_name" {
-  value = module.paymentform_alb.alb_dns_name
-}
+module "paymenform_dns" {
+  source = "../../../providers/cloudflare/dns"
 
-output "alb_zone_id" {
-  value = module.paymentform_alb.alb_zone_id
-}
+  environment           = "prod"
+  resource_prefix       = local.resource_prefix
+  standard_tags         = local.standard_tags
+  cloudflare_api_token  = var.cloudflare_api_token
+  cloudflare_api_email  = var.cloudflare_api_email
+  cloudflare_zone_id    = var.cloudflare_zone_id
+  cloudflare_account_id = var.cloudflare_account_id
 
-output "instance_ips" {
-  value = module.paymentform_backend.instance_ips
-}
+  domain_name        = "paymentform.io"
+  api_subdomain      = "api.paymentform.io"
+  app_subdomain      = "app.paymentform.io"
+  renderer_subdomain = "*.paymentform.io"
 
-output "database_primary_endpoint" {
-  value = module.postgres_database.primary_endpoint
-}
+  api_cname                   = module.paymentform_alb.alb_dns_name
+  app_origin_ips              = []
+  renderer_origin_ip          = module.paymentform_alb.alb_dns_name
+  app_container_endpoint      = module.paymentform_client.container_endpoint
+  renderer_container_endpoint = ""
 
-output "database_replica_endpoint" {
-  value = module.postgres_database.replica_endpoint
-}
-
-output "valkey_primary_endpoint" {
-  value = module.paymentform_cache.primary_endpoint
-}
-
-output "postgresql_primary_data_volume_id" {
-  description = "Volume ID for PostgreSQL primary data"
-  value       = module.postgres_primary_volume.volume_id
-}
-
-output "postgresql_replica_data_volume_id" {
-  description = "Volume ID for PostgreSQL replica data"
-  value       = module.postgres_replica_volume.volume_id
+  cloudflare_plan      = "free"
+  enable_load_balancer = false
+  enable_waf           = false
+  enable_rate_limiting = false
+  rate_limit_requests  = 100
+  health_check_path    = "/health"
+  notification_email   = ""
 }

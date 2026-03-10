@@ -139,6 +139,11 @@ variable "enable_pgbouncer" {
   default     = false
 }
 
+variable "ghcr_username" {
+  description = "GitHub Container Registry username for pulling private images"
+  type        = string
+  default     = ""
+}
 variable "db_name" {
   description = "Database name for PgBouncer"
   type        = string
@@ -152,10 +157,10 @@ variable "db_password" {
   default     = ""
 }
 
-variable "container_image_tag" {
-  description = "Container image tag to deploy (e.g., latest, v1.2.3, dev-abc123)"
+variable "container_image" {
+  description = "Container image name (e.g., ghcr.io/bit-apps-pro/paymentform-backend:latest)"
   type        = string
-  default     = "latest"
+  default     = "ghcr.io/bit-apps-pro/paymentform-backend:latest"
 }
 
 variable "alb_target_group_arn" {

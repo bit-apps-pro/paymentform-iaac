@@ -19,6 +19,6 @@ resource "cloudflare_r2_bucket" "application_storage" {
   name       = "${var.environment}-${var.r2_bucket_name}"
 
   lifecycle {
-    prevent_destroy = true
+    # prevent_destroy = true
   }
 }

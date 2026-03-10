@@ -21,12 +21,6 @@ app_subdomain      = "app.sandbox.paymentform.io"
 renderer_subdomain = "*.sandbox.paymentform.io"
 
 # ----------------------------------------------------------------------------
-# Database Credentials (Required - Sensitive!)
-# ----------------------------------------------------------------------------
-neon_database_url = "postgresql://user:password@host.neon.tech/dbname"
-turso_api_token   = "your_turso_api_token"
-
-# ----------------------------------------------------------------------------
 # Cloudflare Configuration
 # ----------------------------------------------------------------------------
 cloudflare_api_email  = "your@email.com"

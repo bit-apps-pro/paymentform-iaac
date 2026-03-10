@@ -20,7 +20,7 @@ provider "cloudflare" {
 locals {
   # Use container endpoints if available, otherwise fall back to IPs
   app_target      = var.app_container_endpoint != "" ? var.app_container_endpoint : (length(var.app_origin_ips) > 0 ? var.app_origin_ips[0] : "127.0.0.1")
-  api_target      = length(var.api_origin_ips) > 0 ? var.api_origin_ips[0] : "127.0.0.1"
+  api_target      = length(var.api_origin_ips) > 0 ? var.api_origin_ips[0] : (length(var.api_cname) > 0 ? var.api_cname : "127.0.0.1")
   renderer_target = var.renderer_container_endpoint != "" ? var.renderer_container_endpoint : var.renderer_origin_ip
 }
 

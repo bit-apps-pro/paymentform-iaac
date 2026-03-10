@@ -64,10 +64,6 @@ variable "turso_auth_token" {
   sensitive = true
 }
 
-variable "turso_api_token" {
-  type      = string
-  sensitive = true
-}
 
 variable "turso_org_slug" {
   type = string

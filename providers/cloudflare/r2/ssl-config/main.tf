@@ -20,6 +20,6 @@ resource "cloudflare_r2_bucket" "ssl_config" {
   name       = "${var.environment}-${var.r2_bucket_name}"
 
   lifecycle {
-    prevent_destroy = true
+    # prevent_destroy = true
   }
 }
