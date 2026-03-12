@@ -107,6 +107,7 @@ echo "hot_standby = on" >> "$PGCONF_FILE"
 PG_HBA_FILE="$PGDATA_DIR/pg_hba.conf"
 echo "host     all             all             10.0.0.0/16           trust" >> $PG_HBA_FILE
 echo "host     replication     replicator      10.0.0.0/16           md5" >> $PG_HBA_FILE
+${peer_vpc_cidrs_hba}
 
 systemctl enable postgresql
 systemctl start postgresql
@@ -118,5 +119,6 @@ if [ "$RESTORE_BACKUP_VAL" = "true" ]; then
 else
     su - postgres -c "psql -c \"CREATE DATABASE ${db_name};\" 2>/dev/null || true"
     su - postgres -c "psql -c \"ALTER USER postgres WITH PASSWORD '${db_password}';\""
+su - postgres -c "psql -c \"CREATE USER replicator WITH REPLICATION PASSWORD '${db_password}';\" 2>/dev/null || true"
     log "PostgreSQL primary setup complete"
 fi

@@ -196,3 +196,27 @@ variable "db_read_replica_endpoints" {
   type        = list(string)
   default     = []
 }
+
+variable "peer_vpc_ids" {
+  description = "List of peer VPC IDs for VPC peering (one per peer region)"
+  type        = list(string)
+  default     = []
+}
+
+variable "peer_route_table_ids" {
+  description = "List of peer VPC route table IDs"
+  type        = list(string)
+  default     = []
+}
+
+variable "peer_vpc_cidrs" {
+  description = "List of peer VPC CIDRs (must match peer_vpc_ids order)"
+  type        = list(string)
+  default     = []
+}
+
+variable "peer_regions" {
+  description = "List of AWS regions for peer VPCs"
+  type        = list(string)
+  default     = []
+}

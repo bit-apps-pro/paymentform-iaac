@@ -125,6 +125,7 @@ resource "aws_instance" "postgresql_primary" {
     DATA_VOLUME            = "/dev/sdf"
     MOUNT_POINT            = "/mnt/postgresql"
     PGDATA_DIR             = "/mnt/postgresql/data"
+    peer_vpc_cidrs_hba     = join("\n", [for cidr in var.peer_vpc_cidrs : "host  replication  replicator  ${cidr}  scram-sha-256\nhost  all  all  ${cidr}  md5"])
   }))
 }
 

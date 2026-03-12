@@ -1,8 +1,9 @@
 terraform {
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+      source                = "hashicorp/aws"
+      version               = "~> 5.0"
+      configuration_aliases = [aws.peer]
     }
   }
 }
@@ -12,44 +13,38 @@ locals {
 }
 
 # VPC Peering Connection
-resource "aws_vpc_peering_connection" "main" {
+resource "aws_vpc_peering_connection" "peer" {
+  vpc_id        = var.requester_vpc_id
   peer_vpc_id   = var.peer_vpc_id
   peer_region   = var.peer_region
-  peer_owner_id = var.peer_account_id
-  vpc_id        = var.vpc_id
+  peer_owner_id = var.peer_owner_id
 
-  tags = merge(
-    var.standard_tags,
-    {
-      Name = "${local.prefix}-connection"
-    }
-  )
+  tags = merge(var.standard_tags, {
+    Name        = "${var.environment}-vpc-peering"
+    Environment = var.environment
+  })
 }
 
-# Accept VPC Peering Connection (if this is the accepter)
-resource "aws_vpc_peering_connection_accepter" "main" {
-  count                     = var.auto_accept ? 1 : 0
-  vpc_peering_connection_id = aws_vpc_peering_connection.main.id
+resource "aws_vpc_peering_connection_accepter" "peer" {
+  provider              = aws.peer
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
+  auto_accept           = true
 
-  tags = merge(
-    var.standard_tags,
-    {
-      Name = "${local.prefix}-accepter"
-    }
-  )
+  tags = merge(var.standard_tags, {
+    Name        = "${var.environment}-vpc-peering-accepter"
+    Environment = var.environment
+  })
 }
 
-# Route table updates for requester VPC
 resource "aws_route" "requester_to_peer" {
-  route_table_id            = var.requester_route_table_id
-  destination_cidr_block    = var.peer_vpc_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.main.id
+  route_table_id         = var.requester_route_table_id
+  destination_cidr_block = var.peer_vpc_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
 }
 
-# Route table updates for accepter VPC (if auto_accept is true)
-resource "aws_route" "accepter_to_requester" {
-  count                     = var.auto_accept && var.accepter_route_table_id != "" ? 1 : 0
-  route_table_id            = var.accepter_route_table_id
-  destination_cidr_block    = var.vpc_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.main.id
+resource "aws_route" "peer_to_requester" {
+  provider               = aws.peer
+  route_table_id         = var.peer_route_table_id
+  destination_cidr_block = var.requester_vpc_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection_accepter.peer.id
 }

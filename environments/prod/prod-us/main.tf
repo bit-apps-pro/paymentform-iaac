@@ -24,6 +24,15 @@ terraform {
   }
 }
 
+provider "aws" {
+  region = local.region
+}
+
+provider "aws" {
+  alias  = "peer"
+  region = length(var.peer_regions) > 0 ? var.peer_regions[0] : local.region
+}
+
 provider "cloudflare" {
   api_token = var.cloudflare_api_token
 }
@@ -65,6 +74,26 @@ module "paymentform_networking" {
   standard_tags       = local.standard_tags
 }
 
+module "vpc_peering" {
+  source = "../../../providers/aws/vpc-peering"
+  count  = length(var.peer_vpc_ids) > 0 ? length(var.peer_vpc_ids) : 0
+
+  environment           = "prod-us"
+  requester_vpc_id      = module.paymentform_networking.vpc_id
+  requester_route_table_id = module.paymentform_networking.public_route_table_id
+  requester_vpc_cidr    = "10.0.0.0/16"
+  peer_vpc_id           = var.peer_vpc_ids[count.index]
+  peer_route_table_id   = var.peer_route_table_ids[count.index]
+  peer_vpc_cidr         = var.peer_vpc_cidrs[count.index]
+  peer_region           = var.peer_regions[count.index]
+  standard_tags         = local.standard_tags
+
+  providers = {
+    aws      = aws
+    aws.peer = aws.peer
+  }
+}
+
 # =============================================================================
 # Security (Shared)
 # =============================================================================
@@ -79,6 +108,7 @@ module "paymentform_security" {
   enable_strict_security = true
   standard_tags          = local.standard_tags
   alb_security_group_id  = module.paymentform_alb.security_group_id
+  cross_region_vpc_cidrs = var.peer_vpc_cidrs
 }
 
 # module "paymentform-database" {
@@ -185,6 +215,8 @@ module "postgres_database" {
   standard_tags = local.standard_tags
   region        = local.region
   assign_eip    = true
+
+  peer_vpc_cidrs = var.peer_vpc_cidrs
 
   # Pass pre-created volume IDs (empty volumes list)
   volumes = []

@@ -1,20 +1,25 @@
-variable "environment" {
-  description = "Environment name (dev, sandbox, prod)"
+variable "requester_vpc_id" {
+  description = "ID of the requester VPC (local region)"
   type        = string
 }
 
-variable "vpc_id" {
-  description = "VPC ID of the requester"
+variable "requester_route_table_id" {
+  description = "ID of the requester VPC's public route table"
   type        = string
 }
 
-variable "vpc_cidr" {
+variable "requester_vpc_cidr" {
   description = "CIDR block of the requester VPC"
   type        = string
 }
 
 variable "peer_vpc_id" {
-  description = "VPC ID of the peer (accepter)"
+  description = "ID of the peer VPC (remote region)"
+  type        = string
+}
+
+variable "peer_route_table_id" {
+  description = "ID of the peer VPC's public route table"
   type        = string
 }
 
@@ -24,34 +29,23 @@ variable "peer_vpc_cidr" {
 }
 
 variable "peer_region" {
-  description = "Region of the peer VPC"
+  description = "AWS region of the peer VPC"
   type        = string
 }
 
-variable "peer_account_id" {
-  description = "Account ID of the peer VPC"
-  type        = string
-}
-
-variable "requester_route_table_id" {
-  description = "Route table ID in requester VPC to add route to peer"
-  type        = string
-}
-
-variable "accepter_route_table_id" {
-  description = "Route table ID in accepter VPC to add route to requester (optional)"
+variable "peer_owner_id" {
+  description = "AWS account ID of peer VPC owner (empty = same account)"
   type        = string
   default     = ""
 }
 
-variable "auto_accept" {
-  description = "Auto accept the peering connection"
-  type        = bool
-  default     = true
+variable "environment" {
+  description = "Environment name"
+  type        = string
 }
 
 variable "standard_tags" {
-  description = "Standard tags to apply to all resources"
+  description = "Standard tags to apply to resources"
   type        = map(string)
   default     = {}
 }

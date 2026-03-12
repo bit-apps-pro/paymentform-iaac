@@ -239,6 +239,12 @@ variable "volumes" {
   default = []
 }
 
+variable "peer_vpc_cidrs" {
+  description = "List of peer VPC CIDRs to allow in pg_hba.conf (for cross-region replication)"
+  type        = list(string)
+  default     = []
+}
+
 # =============================================================================
 # Pre-created Volume IDs (to attach to instances)
 # =============================================================================

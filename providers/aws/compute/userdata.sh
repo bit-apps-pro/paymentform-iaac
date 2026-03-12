@@ -31,7 +31,7 @@ configure_pgbouncer() {
     
     cat > /etc/pgbouncer/pgbouncer.ini <<EOF
 [databases]
-paymentform = host=${db_host} port=5432 dbname=${db_name}
+${db_name} = host=${db_host} port=5432 dbname=${db_name}
 
 [pgbouncer]
 listen_addr = 127.0.0.1

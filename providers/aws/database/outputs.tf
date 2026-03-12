@@ -30,8 +30,8 @@ output "connection_string" {
 }
 
 output "primary_endpoint" {
-  description = "PostgreSQL primary endpoint (IP)"
-  value       = var.assign_eip ? aws_eip.primary[0].public_ip : aws_instance.postgresql_primary.public_ip
+  description = "PostgreSQL primary endpoint (private IP for intra-VPC connections)"
+  value       = aws_instance.postgresql_primary.private_ip
 }
 
 output "replica_endpoint" {
