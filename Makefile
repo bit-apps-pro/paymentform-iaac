@@ -3,7 +3,8 @@
 	cost-estimate \
 	security-checkov security-tfsec security-full \
 	install-tools quick-start \
-	update-backend update-client update-renderer update-all
+	update-backend update-client update-renderer update-all \
+	userdata-generate userdata-sync
 
 ENV_DIR = environments/prod
 REGION  ?= us-east-1
@@ -49,12 +50,17 @@ help:
 	@echo "Cost Estimation:"
 	@echo "  cost-estimate     Estimate costs"
 	@echo ""
+	@echo "Userdata Management:"
+	@echo "  userdata-generate   Render userdata to bash file (PROVIDER=hetzner|aws)"
+	@echo "  userdata-sync       Force re-apply userdata (PROVIDER=hetzner|aws)"
+	@echo ""
 	@echo "Examples:"
 	@echo "  make init"
 	@echo "  make plan"
 	@echo "  make apply"
 	@echo "  make update-all IMAGE_TAG=v1.2.3"
-	@echo "  make update-backend IMAGE_TAG=latest"
+	@echo "  make userdata-generate PROVIDER=hetzner"
+	@echo "  make userdata-sync PROVIDER=aws"
 
 init:
 	@cd $(ENV_DIR) && tofu init
@@ -156,5 +162,31 @@ update-all:
 		-var="client_container_image=$(IMAGE_TAG)" \
 		-var="renderer_container_image=$(IMAGE_TAG)" \
 		-auto-approve
+
+# Userdata rendering and management
+PROVIDER ?= hetzner
+
+HZ_MODULE ?= module.hetzner_backend_hel1
+AWS_MODULE ?= module.paymentform_backend
+
+userdata-generate:
+ifeq ($(PROVIDER),hetzner)
+	@./scripts/render-userdata.sh hetzner $(HZ_MODULE) hetzner-userdata.sh
+else ifeq ($(PROVIDER),aws)
+	@./scripts/render-userdata.sh aws $(AWS_MODULE) aws-userdata.sh
+else
+	@echo "Error: PROVIDER must be 'hetzner' or 'aws'"
+	@exit 1
+endif
+
+userdata-sync:
+ifeq ($(PROVIDER),hetzner)
+	@cd $(ENV_DIR) && tofu apply -replace=$(HZ_MODULE).null_resource.ssh_apply_userdata[0]
+else ifeq ($(PROVIDER),aws)
+	@cd $(ENV_DIR) && tofu apply -replace=$(AWS_MODULE).null_resource.ssm_apply_userdata
+else
+	@echo "Error: PROVIDER must be 'hetzner' or 'aws'"
+	@exit 1
+endif
 
 .DEFAULT_GOAL := help

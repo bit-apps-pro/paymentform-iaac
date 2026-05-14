@@ -28,7 +28,7 @@ locals {
       endpoint = endpoint
       type     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$", endpoint)) ? "A" : "CNAME"
     }
-    if lookup(var.region_hostnames, region, "") != ""
+    if lookup(var.region_hostnames, region, "") != "" && endpoint != ""
   }
 }
 

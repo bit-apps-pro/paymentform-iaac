@@ -24,11 +24,55 @@ fi
 
 log "Starting container deployment"
 
-ENV_PATH="/etc/app.env"
-> $ENV_PATH
+ENV_PATH="/etc/${service_type}.env"
+> "$ENV_PATH"
 
-echo "${container_env_vars}" >> $ENV_PATH
-echo "AUTO_SSL=${auto_ssl}" >> $ENV_PATH
+CADDY_ENV_PATH="/etc/caddy.env"
+> "$CADDY_ENV_PATH"
+
+# Write environment variables with conditional double-quoting
+# Values containing spaces or # (comment char) are wrapped in double quotes
+quote_env_value() {
+  local val="$1"
+  case "$val" in
+    *[[:space:]\#\"\$\&\;]*)
+      printf '"%s"' "$val"
+      ;;
+    *)
+      printf '%s' "$val"
+      ;;
+  esac
+}
+
+while IFS='=' read -r key value; do
+  [ -z "$key" ] && continue
+  printf '%s=%s\n' "$key" "$(quote_env_value "$value")" >> "$ENV_PATH"
+done <<EOF
+${container_env_vars}
+EOF
+
+while IFS='=' read -r key value; do
+  [ -z "$key" ] && continue
+  printf '%s=%s\n' "$key" "$(quote_env_value "$value")" >> "$CADDY_ENV_PATH"
+done <<EOF
+${caddy_env_vars}
+EOF
+
+while IFS='=' read -r key value; do
+  [ -z "$key" ] && continue
+  case "$value" in
+    *[[:space:]\#]*)
+      echo "$${key}=\"$${value}\"" >> "$CADDY_ENV_PATH"
+      ;;
+    *)
+      echo "$${key}=$${value}" >> "$CADDY_ENV_PATH"
+      ;;
+  esac
+done <<EOF
+${caddy_env_vars}
+EOF
+
+echo "AUTO_SSL=${auto_ssl}" >> "$CADDY_ENV_PATH"
 
 authenticate_ghcr
 

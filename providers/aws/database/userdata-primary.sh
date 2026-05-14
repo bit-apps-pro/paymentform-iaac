@@ -331,6 +331,7 @@ echo "host     all             all             10.0.0.0/16           trust" >> $
 echo "host     replication     replicator      10.0.0.0/16           md5" >> $PG_HBA_SYSTEM_FILE
 echo "host     replication     replicator      127.0.0.1/32          md5" >> $PG_HBA_SYSTEM_FILE
 ${peer_vpc_cidrs_hba}
+${hetzner_cidrs_hba}
 
 systemctl enable postgresql
 systemctl start postgresql
@@ -342,23 +343,79 @@ echo "deb [signed-by=/usr/share/keyrings/cloudflare.gpg] https://pkg.cloudflare.
 apt-get update -y
 apt-get install -y cloudflared
 
-cat > /etc/systemd/system/cloudflared.service <<'EOF'
+mkdir -p /etc/cloudflared
+chmod 700 /etc/cloudflared
+
+cat > /etc/cloudflared/token.env <<'ENVEOF'
+TUNNEL_TOKEN=${tunnel_token}
+ENVEOF
+chmod 600 /etc/cloudflared/token.env
+
+cat > /etc/systemd/system/cloudflared.service <<'SYSTEMDEOF'
 [Unit]
 Description=Cloudflare Tunnel
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
+Type=notify
 Restart=on-failure
 RestartSec=10
-ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token ${tunnel_token}
+StartLimitInterval=60
+StartLimitBurst=3
+
+EnvironmentFile=/etc/cloudflared/token.env
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run
+ExecReload=/bin/kill -HUP $MAINPID
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/cloudflared /tmp /var/tmp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+
+LimitNOFILE=65536
+LimitNPROC=4096
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SYSTEMDEOF
 
 systemctl daemon-reload
 systemctl enable cloudflared
 systemctl start cloudflared
+
+cat > /usr/local/bin/cloudflared-healthcheck.sh <<'HEALTHEOF'
+#!/bin/bash
+set -e
+
+pgrep -x cloudflared >/dev/null || {
+  logger -t cloudflared "Health check failed: process not running"
+  exit 1
+}
+
+if command -v curl >/dev/null 2>&1; then
+  curl -fsS http://localhost:35679/metrics >/dev/null 2>&1 || {
+    logger -t cloudflared "Health check warning: metrics endpoint not reachable"
+  }
+fi
+HEALTHEOF
+chmod +x /usr/local/bin/cloudflared-healthcheck.sh
+
+echo "* * * * * root /usr/local/bin/cloudflared-healthcheck.sh || systemctl restart cloudflared" > /etc/cron.d/cloudflared-healthcheck
+chmod 644 /etc/cron.d/cloudflared-healthcheck
+
 log "cloudflared DB tunnel started"
 %{ endif ~}
 

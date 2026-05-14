@@ -4,12 +4,29 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
 locals {
   # Use instance_prefix when set (multi-instance deployments), else fall back to environment
   prefix = var.instance_prefix != "" ? var.instance_prefix : var.environment
+
+  rendered_userdata = templatefile("${path.module}/userdata.sh", {
+    environment           = var.environment
+    ghcr_username         = var.ghcr_username
+    region                = var.region
+    service_type          = var.service_type
+    container_env_vars    = join("\n", [for k, v in var.container_env_vars : "${k}=${v}" if v != null])
+    caddy_env_vars        = join("\n", [for k, v in var.caddy_env_vars : "${k}=${v}" if v != null])
+    IMAGE                 = var.container_image
+    auto_ssl              = var.auto_ssl
+    tunnel_token          = var.tunnel_token
+    deploy_script_content = var.deploy_script_content
+  })
 }
 
 # EC2 Launch Template
@@ -26,17 +43,7 @@ resource "aws_launch_template" "compute" {
     name = aws_iam_instance_profile.ecs_instance_profile.name
   }
 
-  user_data = base64encode(templatefile("${path.module}/userdata.sh", {
-    environment          = var.environment
-    ghcr_username        = var.ghcr_username
-    region               = var.region
-    service_type         = var.service_type
-    container_env_vars   = join("\n", [for k, v in var.container_env_vars : "${k}='${v}'" if v != null])
-    IMAGE                = var.container_image
-    auto_ssl             = var.auto_ssl
-    tunnel_token         = var.tunnel_token
-    deploy_script_content = var.deploy_script_content
-  }))
+  user_data = base64encode(local.rendered_userdata)
 
   key_name      = var.key_pair_name
   ebs_optimized = var.ebs_optimized
@@ -298,6 +305,48 @@ data "aws_instances" "compute" {
   filter {
     name   = "tag:aws:autoscaling:groupName"
     values = [aws_autoscaling_group.compute.name]
+  }
+
+  depends_on = [aws_autoscaling_group.compute]
+}
+
+# Trigger SSM Run Command on existing instances when userdata changes
+resource "null_resource" "ssm_apply_userdata" {
+  triggers = {
+    user_data_hash = md5(local.rendered_userdata)
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      ASG_NAME="${aws_autoscaling_group.compute.name}"
+      REGION="${var.region}"
+
+      INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+        --auto-scaling-group-names "$ASG_NAME" \
+        --query 'AutoScalingGroups[0].Instances[*].InstanceId' \
+        --output text --region "$REGION")
+
+      if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" = "None" ]; then
+        echo "No instances in ASG $ASG_NAME; skipping SSM userdata update"
+        exit 0
+      fi
+
+      echo "Applying updated userdata to instances: $INSTANCE_IDS"
+
+      aws ssm send-command \
+        --instance-ids $INSTANCE_IDS \
+        --document-name "AWS-RunShellScript" \
+        --region "$REGION" \
+        --comment "Apply updated userdata after tofu apply" \
+        --parameters '${jsonencode({
+          commands = [
+            "echo ${base64encode(local.rendered_userdata)} | base64 -d > /tmp/userdata-update.sh",
+            "chmod +x /tmp/userdata-update.sh",
+            "bash /tmp/userdata-update.sh"
+          ]
+        })}'
+    EOT
   }
 
   depends_on = [aws_autoscaling_group.compute]

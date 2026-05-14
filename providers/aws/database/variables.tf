@@ -259,3 +259,9 @@ variable "volume_ids" {
   type        = map(string)
   default     = {}
 }
+
+variable "hetzner_cidr_blocks" {
+  description = "CIDR blocks of Hetzner backend servers to allow in pg_hba.conf"
+  type        = list(string)
+  default     = []
+}

@@ -44,11 +44,6 @@ resource "cloudflare_workers_script" "cdn_worker" {
       name = "ENVIRONMENT"
       type = "plain_text"
       text = var.environment
-    },
-    {
-      name = "CORS_ORIGINS"
-      type = "plain_text"
-      text = join(",", var.cors_allowed_origins)
     }
   ]
 }

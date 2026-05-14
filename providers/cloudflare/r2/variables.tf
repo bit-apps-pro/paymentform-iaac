@@ -58,12 +58,6 @@ variable "backup_storage_bucket_name" {
   default     = ""
 }
 
-# CORS Configuration
-variable "cors_allowed_origins" {
-  description = "List of allowed origins for CORS configuration"
-  type        = list(string)
-  default     = ["*"]
-}
 
 # Lifecycle Rules
 variable "lifecycle_rules_enabled" {

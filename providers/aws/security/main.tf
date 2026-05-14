@@ -4,6 +4,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -29,6 +33,7 @@ resource "aws_security_group_rule" "ecs_ingress_http" {
   to_port           = 80
   protocol          = "tcp"
   cidr_blocks       = local.cloudflare_ipv4_ranges
+  ipv6_cidr_blocks  = local.cloudflare_ipv6_ranges
   security_group_id = aws_security_group.ecs.id
   description       = "Allow HTTP from Cloudflare"
 }
@@ -39,6 +44,7 @@ resource "aws_security_group_rule" "ecs_ingress_https" {
   to_port           = 443
   protocol          = "tcp"
   cidr_blocks       = local.cloudflare_ipv4_ranges
+  ipv6_cidr_blocks  = local.cloudflare_ipv6_ranges
   security_group_id = aws_security_group.ecs.id
   description       = "Allow HTTPS from Cloudflare"
 }
@@ -168,6 +174,17 @@ resource "aws_security_group_rule" "postgresql_ingress_cross_region" {
   cidr_blocks       = [var.cross_region_vpc_cidrs[count.index]]
   security_group_id = aws_security_group.postgresql.id
   description       = "Allow PostgreSQL replication from cross-region VPC"
+}
+
+resource "aws_security_group_rule" "postgresql_ingress_from_hetzner" {
+  count             = length(var.hetzner_cidr_blocks)
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  cidr_blocks       = [var.hetzner_cidr_blocks[count.index]]
+  security_group_id = aws_security_group.postgresql.id
+  description       = "Allow PostgreSQL from Hetzner backend ${count.index}"
 }
 
 # Cross-region Valkey

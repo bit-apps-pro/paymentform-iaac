@@ -86,9 +86,15 @@ variable "admin_cidr_blocks" {
 }
 
 variable "backend_private_cidrs" {
-  description = "Private CIDRs of backend servers allowed to connect to Postgres"
+  description = "CIDR blocks of backend servers allowed to connect to the replica"
   type        = list(string)
   default     = []
+}
+
+variable "backend_public_ipv4" {
+  description = "Public IPv4 of the backend server. Used as fallback for DB firewall when backend_private_cidrs is empty."
+  type        = string
+  default     = ""
 }
 
 variable "network_id" {

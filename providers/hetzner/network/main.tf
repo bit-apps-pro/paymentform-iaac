@@ -10,6 +10,7 @@ terraform {
 }
 
 resource "hcloud_network" "main" {
+  count    = var.enabled ? 1 : 0
   name     = "${var.resource_prefix}-network"
   ip_range = var.ip_range
 
@@ -20,7 +21,8 @@ resource "hcloud_network" "main" {
 }
 
 resource "hcloud_network_subnet" "main" {
-  network_id   = hcloud_network.main.id
+  count        = var.enabled ? 1 : 0
+  network_id   = hcloud_network.main[0].id
   type         = "cloud"
   network_zone = var.network_zone
   ip_range     = var.subnet_ip_range

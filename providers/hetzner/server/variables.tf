@@ -1,3 +1,9 @@
+variable "enabled" {
+  description = "Whether to create the Hetzner server resources"
+  type        = bool
+  default     = true
+}
+
 variable "environment" {
   type = string
 }
@@ -76,6 +82,12 @@ variable "container_env_vars" {
   default     = {}
 }
 
+variable "backend_container_env_vars" {
+  description = "Environment variables for backend container"
+  type        = map(string)
+  default     = {}
+}
+
 variable "valkey_password" {
   description = "Password for the local Valkey instance"
   type        = string
@@ -107,25 +119,9 @@ variable "admin_cidr_blocks" {
 }
 
 variable "cloudflare_cidrs" {
-  description = "Cloudflare IP ranges for HTTP/HTTPS access"
+  description = "Cloudflare IP ranges for HTTP/HTTPS access. If empty, fetched dynamically from Cloudflare."
   type        = list(string)
-  default = [
-    "173.245.48.0/20",
-    "103.21.244.0/22",
-    "103.22.200.0/22",
-    "103.31.4.0/22",
-    "141.101.64.0/18",
-    "108.162.192.0/18",
-    "190.93.240.0/20",
-    "188.114.96.0/20",
-    "197.234.240.0/22",
-    "198.41.128.0/17",
-    "162.158.0.0/15",
-    "104.16.0.0/13",
-    "104.24.0.0/14",
-    "172.64.0.0/13",
-    "131.0.72.0/22",
-  ]
+  default     = []
 }
 
 variable "renderer_container_image" {
@@ -140,8 +136,36 @@ variable "renderer_container_env_vars" {
   default     = {}
 }
 
+variable "traefik_host" {
+  description = "Primary domain for Traefik routing (e.g. paymentform.io)"
+  type        = string
+}
+
+variable "acme_email" {
+  description = "Email for Let's Encrypt ACME certificate registration"
+  type        = string
+}
+
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key for connecting to Hetzner server and applying userdata updates. Leave empty to disable SSH-based updates."
+  type        = string
+  default     = ""
+}
+
 variable "deploy_script_content" {
   description = "Content of the deploy script to execute on Hetzner instances"
   type        = string
   default     = ""
+}
+
+variable "db_host" {
+  description = "Direct PostgreSQL host (IP or hostname) for backend containers"
+  type        = string
+  default     = ""
+}
+
+variable "caddy_env_vars" {
+  description = "Caddy-specific environment variables (TLS, Cloudflare tokens, etc.)"
+  type        = map(string)
+  default     = {}
 }

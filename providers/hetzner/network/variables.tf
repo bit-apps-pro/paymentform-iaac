@@ -1,3 +1,9 @@
+variable "enabled" {
+  description = "Whether to create the Hetzner network resources"
+  type        = bool
+  default     = true
+}
+
 variable "environment" {
   type = string
 }

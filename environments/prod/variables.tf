@@ -209,6 +209,12 @@ variable "hetzner_ssh_key_name" {
   default     = ""
 }
 
+variable "hetzner_ssh_private_key_path" {
+  description = "Path to SSH private key for Hetzner servers. Used to apply userdata updates without recreation. Leave empty to disable."
+  type        = string
+  default     = ""
+}
+
 variable "hetzner_server_type" {
   description = "Hetzner server type for backend VMs (e.g. cx22, cpx21)"
   type        = string
@@ -313,4 +319,16 @@ variable "admin_cidr_blocks" {
   description = "CIDR blocks allowed for SSH access to Hetzner instances (admin IPs only)"
   type        = list(string)
   default     = []
+}
+
+variable "traefik_host" {
+  description = "Primary domain for Traefik routing on Hetzner backends (e.g. paymentform.io)"
+  type        = string
+  default     = ""
+}
+
+variable "acme_email" {
+  description = "Email for Let's Encrypt ACME certificate registration on Hetzner backends"
+  type        = string
+  default     = ""
 }

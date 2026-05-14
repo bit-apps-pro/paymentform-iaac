@@ -87,7 +87,7 @@ resource "aws_lb_target_group" "https" {
   protocol             = "TCP"
   vpc_id               = var.vpc_id
   deregistration_delay = 30
-  preserve_client_ip   = false
+  preserve_client_ip   = true
 
   health_check {
     enabled             = true
@@ -128,10 +128,10 @@ resource "aws_lb_target_group" "http" {
   vpc_id               = var.vpc_id
   deregistration_delay = 30
 
-  # Preserve client IP is disabled so the EC2 SG sees the NLB IP, not the
-  # end-user IP. Required for the renderer (proxied=false, arbitrary client IPs)
-  # and consistent for the backend too.
-  preserve_client_ip = false
+  # Preserve client IP so the backend sees Cloudflare's edge IP as the source.
+  # This allows Cloudflare headers (CF-Connecting-IP, CF-IPCountry) to flow
+  # through to the application while the SG still restricts to Cloudflare CIDRs.
+  preserve_client_ip = true
 
   health_check {
     enabled             = true

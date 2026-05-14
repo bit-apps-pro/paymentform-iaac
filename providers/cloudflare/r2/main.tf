@@ -57,5 +57,4 @@ module "cdn-worker" {
   worker_enabled          = var.worker_enabled
   worker_route_pattern    = var.worker_route_pattern
   application_bucket_name = module.application-storage.bucket_name
-  cors_allowed_origins    = var.cors_allowed_origins
 }

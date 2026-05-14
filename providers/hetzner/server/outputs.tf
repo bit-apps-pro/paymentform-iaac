@@ -1,20 +1,20 @@
 output "server_id" {
-  value = hcloud_server.backend.id
+  value = var.enabled ? try(hcloud_server.backend[0].id, "") : ""
 }
 
 output "ipv4_address" {
-  value = hcloud_server.backend.ipv4_address
+  value = var.enabled ? try(hcloud_server.backend[0].ipv4_address, "") : ""
 }
 
 output "ipv6_address" {
-  value = hcloud_server.backend.ipv6_address
+  value = var.enabled ? try(hcloud_server.backend[0].ipv6_address, "") : ""
 }
 
 output "server_name" {
-  value = hcloud_server.backend.name
+  value = var.enabled ? try(hcloud_server.backend[0].name, "") : ""
 }
 
 output "private_ipv4_address" {
   description = "Private IP on the attached Hetzner network (empty string if no network attached)"
-  value       = var.network_id != "" ? hcloud_server_network.backend[0].ip : ""
+  value       = var.enabled && var.network_id != "" ? try(hcloud_server_network.backend[0].ip, "") : ""
 }

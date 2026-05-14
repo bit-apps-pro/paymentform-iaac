@@ -54,8 +54,4 @@ variable "regional_domains" {
   default     = {}
 }
 
-variable "cors_allowed_origins" {
-  description = "List of allowed origins for CORS configuration"
-  type        = list(string)
-  default     = ["*"]
-}
+

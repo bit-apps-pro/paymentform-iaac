@@ -73,3 +73,9 @@ variable "nlb_security_group_ids" {
   type        = list(string)
   default     = []
 }
+
+variable "hetzner_cidr_blocks" {
+  description = "CIDR blocks of Hetzner backend servers to allow PostgreSQL access from"
+  type        = list(string)
+  default     = []
+}

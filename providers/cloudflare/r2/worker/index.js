@@ -86,11 +86,8 @@ function isPublicPath(path) {
 }
 
 function getCorsHeaders(request, env) {
-  const origin = request.headers.get('Origin');
-  const allowedOrigins = env.CORS_ORIGINS ? env.CORS_ORIGINS.split(',') : ['*'];
-
   const headers = {
-    'Access-Control-Allow-Origin': allowedOrigins.includes('*') ? '*' : (allowedOrigins.includes(origin) ? origin : 'null'),
+    'Access-Control-Allow-Origin': '*',
   };
 
   return headers;

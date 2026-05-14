@@ -54,7 +54,7 @@ cd "$WORKER_PATH"
 
 if ! command -v wrangler &> /dev/null; then
     echo "Installing wrangler..."
-    npm install -g wrangler
+    pnpm install -g wrangler
 fi
 
 wrangler deploy --env prod

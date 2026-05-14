@@ -127,6 +127,12 @@ variable "container_env_vars" {
   default     = {}
 }
 
+variable "caddy_env_vars" {
+  description = "Caddy-specific environment variables (ACME_EMAIL, CLOUDFLARE_API_TOKEN, CADDY_LOG_LEVEL, etc.)"
+  type        = map(string)
+  default     = {}
+}
+
 variable "ghcr_username" {
   description = "GitHub Container Registry username for pulling private images"
   type        = string

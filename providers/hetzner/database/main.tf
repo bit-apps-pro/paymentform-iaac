@@ -12,7 +12,7 @@ terraform {
 locals {
   server_name     = "${var.resource_prefix}-${var.region}-db-replica"
   admin_source_ips = sort(distinct(length(var.admin_cidr_blocks) > 0 ? var.admin_cidr_blocks : ["0.0.0.0/0"]))
-  db_source_ips    = sort(distinct(length(var.backend_private_cidrs) > 0 ? var.backend_private_cidrs : var.allowed_cidrs))
+  db_source_ips    = sort(distinct(length(var.backend_private_cidrs) > 0 ? var.backend_private_cidrs : (var.backend_public_ipv4 != "" ? ["${var.backend_public_ipv4}/32"] : var.allowed_cidrs)))
 }
 
 resource "hcloud_ssh_key" "db" {

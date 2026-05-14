@@ -159,6 +159,10 @@ hetzner_ssh_public_key = "ssh-ed25519 AAAA..."  # cat ~/.ssh/id_ed25519.pub
 hetzner_server_type    = "cx22"  # cheapest; cx32 for more RAM
 hetzner_db_server_type = "cx22"
 
+# Traefik / ACME configuration for Hetzner backends
+traefik_host = "paymentform.io"
+acme_email   = "hello@paymentform.io"
+
 # ----------------------------------------------------------------------------
 # Hetzner Firewall Configuration
 # ----------------------------------------------------------------------------
