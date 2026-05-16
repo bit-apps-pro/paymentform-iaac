@@ -327,7 +327,54 @@ echo "archive_mode = on" >> "$PGCONF_FILE"
 echo "archive_command = 'AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required AWS_ACCESS_KEY_ID=${database_backup_bucket_access_key_id} AWS_SECRET_ACCESS_KEY=${database_backup_bucket_access_key} barman-cloud-wal-archive --cloud-provider aws-s3 --endpoint-url ${database_backup_bucket_endpoint} s3://${database_backup_bucket_name}/postgresql ${environment}-postgresql-primary %p'" >> "$PGCONF_FILE"
 echo "archive_timeout = 300" >> "$PGCONF_FILE"
 
+if ! grep -q '^# === BEGIN MANAGED TUNING ===' "$PGCONF_FILE" 2>/dev/null; then
+cat >> "$PGCONF_FILE" <<'PG_TUNING'
+# === BEGIN MANAGED TUNING ===
+# Memory
+shared_buffers = 1GB
+effective_cache_size = 3GB
+work_mem = 8MB
+maintenance_work_mem = 256MB
+huge_pages = try
+
+# Connections
+max_connections = 200
+
+# WAL / Checkpoints
+wal_buffers = 16MB
+checkpoint_timeout = 15min
+checkpoint_completion_target = 0.9
+min_wal_size = 1GB
+max_wal_size = 4GB
+wal_keep_size = 1GB
+wal_compression = on
+
+# Storage / IO (gp3 SSD)
+random_page_cost = 1.1
+effective_io_concurrency = 200
+
+# Parallelism (2 vCPU instance)
+max_worker_processes = 4
+max_parallel_workers = 2
+max_parallel_workers_per_gather = 1
+
+# Safety — do NOT relax for a payments app
+synchronous_commit = on
+
+# Observability
+log_min_duration_statement = 500
+log_checkpoints = on
+log_lock_waits = on
+track_io_timing = on
+shared_preload_libraries = 'pg_stat_statements'
+pg_stat_statements.track = top
+pg_stat_statements.max = 10000
+# === END MANAGED TUNING ===
+PG_TUNING
+fi
+
 echo "host     all             all             10.0.0.0/16           trust" >> $PG_HBA_SYSTEM_FILE
+echo "host     all             all             127.0.0.1/32          scram-sha-256" >> $PG_HBA_SYSTEM_FILE
 echo "host     replication     replicator      10.0.0.0/16           md5" >> $PG_HBA_SYSTEM_FILE
 echo "host     replication     replicator      127.0.0.1/32          md5" >> $PG_HBA_SYSTEM_FILE
 ${peer_vpc_cidrs_hba}
@@ -335,6 +382,77 @@ ${hetzner_cidrs_hba}
 
 systemctl enable postgresql
 systemctl start postgresql
+
+# === pgbouncer install + auth_query setup ===
+log "Installing pgbouncer..."
+apt-get install -y pgbouncer
+
+# Generate a random password for the internal pgbouncer auth user.
+# This user only authenticates pgbouncer -> postgres for the credential lookup.
+PGBOUNCER_AUTH_PASS=$(openssl rand -hex 32)
+
+# Create the pgbouncer_auth role and the lookup function in Postgres.
+# SECURITY DEFINER lets pgbouncer_auth read pg_shadow via this function only,
+# without granting pg_shadow access directly.
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='pgbouncer_auth'" | grep -q 1; then
+  sudo -u postgres psql <<SQL
+CREATE ROLE pgbouncer_auth WITH LOGIN PASSWORD '$${PGBOUNCER_AUTH_PASS}';
+
+CREATE OR REPLACE FUNCTION public.lookup_pg_user(uname text)
+RETURNS TABLE(usename text, passwd text)
+LANGUAGE sql SECURITY DEFINER AS \$\$
+    SELECT usename::text, passwd::text
+    FROM pg_shadow
+    WHERE usename = uname;
+\$\$;
+
+REVOKE ALL ON FUNCTION public.lookup_pg_user(text) FROM public;
+GRANT EXECUTE ON FUNCTION public.lookup_pg_user(text) TO pgbouncer_auth;
+SQL
+fi
+
+# Query pg_shadow to get the SCRAM-SHA-256 hash that postgres stored.
+# This is exactly the format pgbouncer expects in userlist.txt.
+mkdir -p /etc/pgbouncer
+sudo -u postgres psql -t -A -c \
+  "SELECT '\"'||usename||'\" \"'||passwd||'\"' FROM pg_shadow WHERE usename='pgbouncer_auth'" \
+  > /etc/pgbouncer/userlist.txt
+
+chown postgres:postgres /etc/pgbouncer/userlist.txt
+chmod 640 /etc/pgbouncer/userlist.txt
+
+cat > /etc/pgbouncer/pgbouncer.ini <<'INI'
+[databases]
+* = host=127.0.0.1 port=5432
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 6432
+auth_type = scram-sha-256
+auth_file = /etc/pgbouncer/userlist.txt
+auth_user = pgbouncer_auth
+auth_query = SELECT usename, passwd FROM public.lookup_pg_user($1)
+pool_mode = transaction
+max_client_conn = 1000
+default_pool_size = 25
+reserve_pool_size = 5
+reserve_pool_timeout = 3
+server_idle_timeout = 600
+server_lifetime = 3600
+log_connections = 0
+log_disconnections = 0
+log_pooler_errors = 1
+stats_period = 60
+admin_users = postgres
+INI
+
+chown postgres:postgres /etc/pgbouncer/pgbouncer.ini
+chmod 640 /etc/pgbouncer/pgbouncer.ini
+
+systemctl enable pgbouncer
+systemctl restart pgbouncer
+
+log "pgbouncer installed and started"
 
 %{ if tunnel_token != "" ~}
 log "Installing cloudflared for DB tunnel"

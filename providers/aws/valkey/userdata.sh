@@ -34,8 +34,12 @@ logfile ""
 databases 16
 always-show-logo no
 
-maxmemory ${memory_max}
+maxmemory 2.5gb
 maxmemory-policy allkeys-lru
+lazyfree-lazy-eviction yes
+lazyfree-lazy-expire yes
+lazyfree-lazy-server-del yes
+replica-lazy-flush yes
 
 cluster-enabled yes
 cluster-config-file /etc/valkey/nodes.conf
@@ -48,6 +52,7 @@ appendonly yes
 appendfilename "appendonly.aof"
 appendfsync everysec
 no-appendfsync-on-rewrite no
+save ""
 EOF
 
 %{ else }
@@ -69,13 +74,18 @@ logfile ""
 databases 16
 always-show-logo no
 
-maxmemory ${memory_max}
+maxmemory 2.5gb
 maxmemory-policy allkeys-lru
+lazyfree-lazy-eviction yes
+lazyfree-lazy-expire yes
+lazyfree-lazy-server-del yes
+replica-lazy-flush yes
 
 appendonly yes
 appendfilename "appendonly.aof"
 appendfsync everysec
 no-appendfsync-on-rewrite no
+save ""
 EOF
 
 %{ endif }

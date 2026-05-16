@@ -216,7 +216,7 @@ if [ "$NEED_BASEBACKUP" = "true" ]; then
     chmod 700 "$PGDATA_DIR"
 
     log "Starting base backup from primary ${primary_ip}..."
-    runuser -u postgres -- env PGPASSFILE="$PGPASS_FILE" pg_basebackup -D "$PGDATA_DIR" -d "host=${primary_ip} port=5432 user=replicator dbname=replication passfile=$${PGPASS_FILE}" -v -P -w -R
+    runuser -u postgres -- env PGPASSFILE="$PGPASS_FILE" pg_basebackup -D "$PGDATA_DIR" -d "host=${primary_ip} port=5432 user=replicator dbname=replication passfile=$${PGPASS_FILE}" -v -P -w -R -C --slot=paymentform_replica
 fi
 
 if ! grep -q '^hot_standby = on$' "$PGCONF_FILE" 2>/dev/null; then
@@ -227,6 +227,55 @@ if grep -q "^data_directory" "$PGCONF_FILE" 2>/dev/null; then
     sed -i "s|^data_directory\s*=.*|data_directory = '$PGDATA_DIR'|" "$PGCONF_FILE"
 fi
 
+if ! grep -q '^# === BEGIN MANAGED TUNING ===' "$PGCONF_FILE" 2>/dev/null; then
+cat >> "$PGCONF_FILE" <<'PG_TUNING'
+# === BEGIN MANAGED TUNING ===
+# Memory
+shared_buffers = 1GB
+effective_cache_size = 3GB
+work_mem = 8MB
+maintenance_work_mem = 256MB
+huge_pages = try
+
+# Connections
+max_connections = 200
+
+# WAL / Checkpoints
+wal_buffers = 16MB
+checkpoint_timeout = 15min
+checkpoint_completion_target = 0.9
+min_wal_size = 1GB
+max_wal_size = 4GB
+wal_compression = on
+
+# Storage / IO (gp3 SSD)
+random_page_cost = 1.1
+effective_io_concurrency = 200
+
+# Parallelism (2 vCPU instance)
+max_worker_processes = 4
+max_parallel_workers = 2
+max_parallel_workers_per_gather = 1
+
+# Safety — do NOT relax for a payments app
+synchronous_commit = on
+
+# Observability
+log_min_duration_statement = 500
+log_checkpoints = on
+log_lock_waits = on
+track_io_timing = on
+shared_preload_libraries = 'pg_stat_statements'
+pg_stat_statements.track = top
+pg_stat_statements.max = 10000
+
+# Replica-specific
+hot_standby_feedback = on
+max_standby_streaming_delay = 30s
+# === END MANAGED TUNING ===
+PG_TUNING
+fi
+
 chown -R --no-dereference postgres:postgres "$PGDATA_DIR"
 chmod 700 "$PGDATA_DIR"
 
@@ -234,3 +283,67 @@ systemctl enable postgresql
 systemctl start postgresql
 
 log "PostgreSQL replica setup complete"
+
+# === pgbouncer install + auth_query setup (replica) ===
+# On replica: role and lookup function come from primary via replication.
+# We regenerate userlist.txt from local pg_shadow and start pgbouncer.
+log "Installing pgbouncer on replica..."
+apt-get install -y pgbouncer
+
+# Wait for pgbouncer_auth role to be replicated from primary (up to 60s).
+log "Waiting for pgbouncer_auth role to replicate from primary..."
+for i in $(seq 1 60); do
+  if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='pgbouncer_auth'" 2>/dev/null | grep -q 1; then
+    log "pgbouncer_auth role replicated after $${i}s"
+    break
+  fi
+  sleep 1
+done
+
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='pgbouncer_auth'" 2>/dev/null | grep -q 1; then
+  log "ERROR: pgbouncer_auth role did not replicate within 60s. pgbouncer will not start with valid auth."
+  exit 1
+fi
+
+# Query pg_shadow to get the SCRAM-SHA-256 hash that postgres stored.
+# This is exactly the format pgbouncer expects in userlist.txt.
+mkdir -p /etc/pgbouncer
+sudo -u postgres psql -t -A -c \
+  "SELECT '\"'||usename||'\" \"'||passwd||'\"' FROM pg_shadow WHERE usename='pgbouncer_auth'" \
+  > /etc/pgbouncer/userlist.txt
+
+chown postgres:postgres /etc/pgbouncer/userlist.txt
+chmod 640 /etc/pgbouncer/userlist.txt
+
+cat > /etc/pgbouncer/pgbouncer.ini <<'INI'
+[databases]
+* = host=127.0.0.1 port=5432
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 6432
+auth_type = scram-sha-256
+auth_file = /etc/pgbouncer/userlist.txt
+auth_user = pgbouncer_auth
+auth_query = SELECT usename, passwd FROM public.lookup_pg_user($1)
+pool_mode = transaction
+max_client_conn = 1000
+default_pool_size = 25
+reserve_pool_size = 5
+reserve_pool_timeout = 3
+server_idle_timeout = 600
+server_lifetime = 3600
+log_connections = 0
+log_disconnections = 0
+log_pooler_errors = 1
+stats_period = 60
+admin_users = postgres
+INI
+
+chown postgres:postgres /etc/pgbouncer/pgbouncer.ini
+chmod 640 /etc/pgbouncer/pgbouncer.ini
+
+systemctl enable pgbouncer
+systemctl restart pgbouncer
+
+log "pgbouncer installed and started on replica"

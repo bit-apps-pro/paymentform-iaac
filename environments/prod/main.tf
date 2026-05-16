@@ -166,12 +166,12 @@ module "postgres_database" {
   security_group_id = module.paymentform_security.postgresql_security_group_id
 
   primary_instance_type = "t4g.medium"
-  replica_instance_type = "t4g.micro"
+  replica_instance_type = "t4g.small"
   primary_volume_size   = 20
   replica_volume_size   = 20
   volume_type           = "gp3"
 
-  enable_replica   = false
+  enable_replica   = true
   postgres_version = "17"
   db_name          = var.db_database
   db_user          = var.db_username
@@ -214,7 +214,7 @@ module "paymentform_cache" {
   volume_type   = "gp3"
 
   cluster_password = var.redis_password
-  memory_max       = "1gb"
+  memory_max       = "2.5gb"
 
   standard_tags = local.standard_tags
 }
@@ -233,9 +233,9 @@ module "paymentform_backend" {
   instance_type              = "t4g.small"
   ami_id                     = "ami-06fdf1c06301d49be"
   key_pair_name              = ""
-  min_size                   = 1
-  max_size                   = 4
-  desired_capacity           = 1
+  min_size                   = 2
+  max_size                   = 8
+  desired_capacity           = 2
   scaling_cpu_threshold      = 70
   scaling_down_cpu_threshold = 30
   standard_tags              = local.standard_tags
@@ -290,7 +290,7 @@ module "paymentform_backend" {
     TENANT_TURSO_DEFAULT_REGION = "aws-ap-northeast-1"
     TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
 
-    SESSION_DRIVER   = "database"
+    SESSION_DRIVER   = "redis"
     SESSION_LIFETIME = 120
     SESSION_ENCRYPT  = false
     SESSION_PATH     = "/"
@@ -298,7 +298,7 @@ module "paymentform_backend" {
 
     BROADCAST_CONNECTION = "reverb"
     FILESYSTEM_DISK      = "local"
-    QUEUE_CONNECTION     = "database"
+    QUEUE_CONNECTION     = "redis"
     CACHE_STORE          = "redis"
 
     REDIS_CLIENT   = "phpredis"
@@ -386,12 +386,14 @@ module "paymentform_backend" {
   caddy_env_vars = {
     APP_DOMAIN                       = "api.paymentform.io"
     CLOUDFLARE_API_TOKEN             = var.cloudflare_api_token_wildcard_dns
-    CADDY_LOG_LEVEL                  = "debug"
+    CADDY_LOG_LEVEL                  = "warn"
     ACME_EMAIL                       = "hello@paymentform.io"
     SSL_STORAGE_BUCKET_NAME          = module.paymentform_storage_ssl_config.bucket_name
     SSL_STORAGE_BUCKET_HOST          = module.paymentform_storage_ssl_config.bucket_domain
     SSL_STORAGE_BUCKET_ACCESS_KEY_ID = var.ssl_storage_access_key_id
     SSL_STORAGE_BUCKET_ACCESS_KEY    = var.ssl_storage_secret_access_key
+    NUM_THREADS    = "16"
+    OCTANE_WORKERS = "6"
   }
 }
 
@@ -687,7 +689,7 @@ module "hetzner_backend_hel1" {
     TENANT_TURSO_DEFAULT_REGION = "aws-ap-northeast-1"
     TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
 
-    SESSION_DRIVER   = "database"
+    SESSION_DRIVER   = "redis"
     SESSION_LIFETIME = "120"
     SESSION_ENCRYPT  = "false"
     SESSION_PATH     = "/"
@@ -884,7 +886,7 @@ module "hetzner_backend_sin1" {
     TENANT_TURSO_DEFAULT_REGION = "aws-ap-northeast-1"
     TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
 
-    SESSION_DRIVER   = "database"
+    SESSION_DRIVER   = "redis"
     SESSION_LIFETIME = "120"
     SESSION_ENCRYPT  = "false"
     SESSION_PATH     = "/"
