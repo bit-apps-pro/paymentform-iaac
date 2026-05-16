@@ -61,6 +61,18 @@ resource "aws_security_group_rule" "ecs_ingress_from_nlb" {
   description              = "Allow HTTP/HTTPS from NLB ${count.index}"
 }
 
+# Allow HTTP from each ALB security group
+resource "aws_security_group_rule" "ecs_ingress_from_alb" {
+  count                    = length(var.alb_security_group_ids)
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = var.alb_security_group_ids[count.index]
+  security_group_id        = aws_security_group.ecs.id
+  description              = "Allow HTTP from ALB ${count.index}"
+}
+
 # Additional inbound rules for application ports - only from itself (for pgbouncer)
 resource "aws_security_group_rule" "ecs_ingress_app_ports" {
   count                    = length(var.app_ports) > 0 ? length(var.app_ports) : 0

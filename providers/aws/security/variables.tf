@@ -74,6 +74,12 @@ variable "nlb_security_group_ids" {
   default     = []
 }
 
+variable "alb_security_group_ids" {
+  description = "Security group IDs of ALBs allowed to reach the ECS instances on port 80"
+  type        = list(string)
+  default     = []
+}
+
 variable "hetzner_cidr_blocks" {
   description = "CIDR blocks of Hetzner backend servers to allow PostgreSQL access from"
   type        = list(string)
