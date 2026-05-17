@@ -97,7 +97,6 @@ module "paymentform_security" {
   enable_strict_security = true
   standard_tags          = local.standard_tags
   nlb_security_group_ids = [
-    module.paymentform_nlb_backend.security_group_id,
     module.paymentform_nlb_renderer.security_group_id,
   ]
   alb_security_group_ids = [module.paymentform_alb_backend.security_group_id]
@@ -226,7 +225,7 @@ module "paymentform_backend" {
   source = "../../providers/aws/compute-alb"
 
   depends_on = [
-    module.paymentform_nlb_backend,
+    module.paymentform_alb_backend,
     module.paymentform_security
   ]
 
@@ -260,8 +259,6 @@ module "paymentform_backend" {
   capacity_rebalance                       = true
   alb_target_group_arns = [
     module.paymentform_alb_backend.target_group_arn,
-    module.paymentform_nlb_backend.https_target_group_arn,
-    module.paymentform_nlb_backend.http_target_group_arn,
   ]
   deploy_script_content = file("${path.module}/../../../backend/.github/scripts/deploy-ec2.sh")
 
@@ -550,20 +547,6 @@ module "paymentform_alb_backend" {
   enable_deletion_protection = true
   standard_tags              = local.standard_tags
   acm_certificate_arn        = module.paymentform_acm_backend.certificate_arn
-  alert_webhook_url          = var.alert_webhook_url
-}
-
-# NLB for backend API - api.paymentform.io → port 80/443 → backend containers
-module "paymentform_nlb_backend" {
-  source = "../../providers/aws/nlb"
-
-  environment                = "prod"
-  prefix                     = "${local.resource_prefix}-backend"
-  service_label              = "bknd"
-  vpc_id                     = module.paymentform_networking.vpc_id
-  subnet_ids                 = module.paymentform_networking.public_subnet_ids
-  enable_deletion_protection = false
-  standard_tags              = local.standard_tags
   alert_webhook_url          = var.alert_webhook_url
 }
 
@@ -1066,7 +1049,7 @@ module "paymenform_dns" {
   app_subdomain      = "app.paymentform.io"
   renderer_subdomain = "*.paymentform.io"
 
-  api_cname                   = module.paymentform_nlb_backend.nlb_dns_name
+  api_cname                   = module.paymentform_alb_backend.alb_dns_name
   app_origin_ips              = []
   renderer_container_endpoint = module.paymentform_nlb_renderer.nlb_dns_name
 

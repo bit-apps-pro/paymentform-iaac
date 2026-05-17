@@ -3,9 +3,9 @@ output "region" {
   value = local.region
 }
 
-output "nlb_backend_dns_name" {
-  description = "DNS name of the backend NLB (api.paymentform.io target)"
-  value       = module.paymentform_nlb_backend.nlb_dns_name
+output "alb_backend_dns_name" {
+  description = "DNS name of the backend ALB (api.paymentform.io target)"
+  value       = module.paymentform_alb_backend.alb_dns_name
 }
 
 output "nlb_renderer_dns_name" {
