@@ -268,6 +268,8 @@ max_parallel_workers_per_gather = 1
 
 # Safety — do NOT relax for a payments app
 synchronous_commit = on
+statement_timeout = 60s
+idle_in_transaction_session_timeout = 60s
 
 # Observability
 log_min_duration_statement = 500
