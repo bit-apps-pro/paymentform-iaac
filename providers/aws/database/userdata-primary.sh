@@ -391,32 +391,42 @@ apt-get install -y pgbouncer
 # This user only authenticates pgbouncer -> postgres for the credential lookup.
 PGBOUNCER_AUTH_PASS=$(openssl rand -hex 32)
 
-# Create the pgbouncer_auth role and the lookup function in Postgres.
+# Create (or rotate) the pgbouncer_auth role and the lookup function.
 # SECURITY DEFINER lets pgbouncer_auth read pg_shadow via this function only,
-# without granting pg_shadow access directly.
-if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='pgbouncer_auth'" | grep -q 1; then
-  sudo -u postgres psql <<SQL
+# without granting pg_shadow access directly. The role's cleartext password
+# is written to userlist.txt below so pgbouncer can authenticate to Postgres
+# itself via scram-sha-256 (pgbouncer cannot derive a SCRAM client response
+# from just the stored verifier — it needs the cleartext, or its own SCRAM
+# secret entry, neither of which exists if we only read pg_shadow).
+if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='pgbouncer_auth'" | grep -q 1; then
+  # Rotate password to match this run so userlist.txt below is in sync.
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE pgbouncer_auth WITH PASSWORD '$${PGBOUNCER_AUTH_PASS}'"
+else
+  sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
 CREATE ROLE pgbouncer_auth WITH LOGIN PASSWORD '$${PGBOUNCER_AUTH_PASS}';
+SQL
+fi
 
+# Function lives in the postgres db (lookups go through auth_dbname=postgres
+# below). CREATE OR REPLACE so updating the function signature is idempotent.
+sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
 CREATE OR REPLACE FUNCTION public.lookup_pg_user(uname text)
 RETURNS TABLE(usename text, passwd text)
-LANGUAGE sql SECURITY DEFINER AS \$\$
+LANGUAGE sql SECURITY DEFINER AS $$
     SELECT usename::text, passwd::text
     FROM pg_shadow
     WHERE usename = uname;
-\$\$;
+$$;
 
 REVOKE ALL ON FUNCTION public.lookup_pg_user(text) FROM public;
 GRANT EXECUTE ON FUNCTION public.lookup_pg_user(text) TO pgbouncer_auth;
 SQL
-fi
 
-# Query pg_shadow to get the SCRAM-SHA-256 hash that postgres stored.
-# This is exactly the format pgbouncer expects in userlist.txt.
+# userlist.txt for pgbouncer client auth + its own server auth.
+# CLEARTEXT for pgbouncer_auth so pgbouncer can run SCRAM with PG.
+# Other users are looked up dynamically via auth_query.
 mkdir -p /etc/pgbouncer
-sudo -u postgres psql -t -A -c \
-  "SELECT '\"'||usename||'\" \"'||passwd||'\"' FROM pg_shadow WHERE usename='pgbouncer_auth'" \
-  > /etc/pgbouncer/userlist.txt
+printf '"pgbouncer_auth" "%s"\n' "$${PGBOUNCER_AUTH_PASS}" > /etc/pgbouncer/userlist.txt
 
 chown postgres:postgres /etc/pgbouncer/userlist.txt
 chmod 640 /etc/pgbouncer/userlist.txt
@@ -432,6 +442,7 @@ auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
 auth_user = pgbouncer_auth
 auth_query = SELECT usename, passwd FROM public.lookup_pg_user($1)
+auth_dbname = postgres
 pool_mode = transaction
 max_client_conn = 1000
 default_pool_size = 25
