@@ -100,6 +100,7 @@ module "paymentform_security" {
     module.paymentform_nlb_backend.security_group_id,
     module.paymentform_nlb_renderer.security_group_id,
   ]
+  alb_security_group_ids = [module.paymentform_alb_backend.security_group_id]
   cross_region_vpc_cidrs = var.peer_vpc_cidrs
 }
 
@@ -220,7 +221,7 @@ module "paymentform_cache" {
 }
 
 module "paymentform_backend" {
-  source = "../../providers/aws/compute"
+  source = "../../providers/aws/compute-alb"
 
   depends_on = [
     module.paymentform_nlb_backend,
@@ -236,8 +237,8 @@ module "paymentform_backend" {
   min_size                   = 2
   max_size                   = 8
   desired_capacity           = 2
-  scaling_cpu_threshold      = 70
-  scaling_down_cpu_threshold = 30
+  alb_arn_suffix             = module.paymentform_alb_backend.alb_arn_suffix
+  target_group_arn_suffix    = module.paymentform_alb_backend.target_group_arn_suffix
   standard_tags              = local.standard_tags
   detailed_monitoring        = true
   ebs_optimized              = true
@@ -251,6 +252,7 @@ module "paymentform_backend" {
   ghcr_username   = var.ghcr_username
   container_image = var.backend_container_image
   alb_target_group_arns = [
+    module.paymentform_alb_backend.target_group_arn,
     module.paymentform_nlb_backend.https_target_group_arn,
     module.paymentform_nlb_backend.http_target_group_arn,
   ]
@@ -398,7 +400,7 @@ module "paymentform_backend" {
 }
 
 module "paymentform_renderer" {
-  source = "../../providers/aws/compute"
+  source = "../../providers/aws/compute-nlb"
 
   depends_on = [
     module.paymentform_nlb_renderer,
@@ -513,6 +515,35 @@ module "paymentform_kv_store" {
   deploy_worker      = true
   worker_path        = "${path.root}/../../../kv-store"
   kv_store_api_token = var.kv_store_api_token
+}
+
+# =============================================================================
+# ACM Certificate for Backend API
+# =============================================================================
+module "paymentform_acm_backend" {
+  source = "../../providers/aws/acm"
+
+  domain_name               = "api.paymentform.io"
+  subject_alternative_names = []
+  cloudflare_zone_id        = var.cloudflare_zone_id
+  standard_tags             = local.standard_tags
+}
+
+# =============================================================================
+# ALB for Backend API
+# =============================================================================
+module "paymentform_alb_backend" {
+  source = "../../providers/aws/alb"
+
+  environment                = "prod"
+  prefix                     = "${local.resource_prefix}-backend"
+  service_label              = "bknd"
+  vpc_id                     = module.paymentform_networking.vpc_id
+  subnet_ids                 = module.paymentform_networking.public_subnet_ids
+  enable_deletion_protection = true
+  standard_tags              = local.standard_tags
+  acm_certificate_arn        = module.paymentform_acm_backend.certificate_arn
+  alert_webhook_url          = var.alert_webhook_url
 }
 
 # NLB for backend API - api.paymentform.io → port 80/443 → backend containers
