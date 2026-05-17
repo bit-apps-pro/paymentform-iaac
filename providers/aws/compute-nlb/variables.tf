@@ -42,16 +42,16 @@ variable "desired_capacity" {
   type        = number
 }
 
-variable "scaling_cpu_threshold" {
-  description = "CPU threshold percentage that triggers scale up"
+variable "scaling_memory_threshold" {
+  description = "Memory utilization percentage that triggers scale up (published by CloudWatch Agent as mem_used_percent in CWAgent namespace)"
   type        = number
   default     = 70
 }
 
-variable "scaling_down_cpu_threshold" {
-  description = "CPU threshold percentage that triggers scale down"
+variable "scaling_down_memory_threshold" {
+  description = "Memory utilization percentage that triggers scale down"
   type        = number
-  default     = 30
+  default     = 40
 }
 
 variable "standard_tags" {

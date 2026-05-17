@@ -103,42 +103,33 @@ resource "aws_autoscaling_group" "compute" {
 
   target_group_arns = var.alb_target_group_arns
 
-  dynamic "launch_template" {
-    for_each = var.spot_instance_percentage == 0 ? [1] : []
-    content {
-      id      = aws_launch_template.compute.id
-      version = "$Latest"
+  mixed_instances_policy {
+    instances_distribution {
+      on_demand_base_capacity                  = var.on_demand_base_capacity
+      on_demand_percentage_above_base_capacity = var.on_demand_percentage_above_base_capacity
+      spot_allocation_strategy                 = var.spot_allocation_strategy
     }
-  }
 
-  dynamic "mixed_instances_policy" {
-    for_each = var.spot_instance_percentage > 0 ? [1] : []
-    content {
-      instances_distribution {
-        on_demand_base_capacity                  = var.on_demand_base_capacity
-        on_demand_percentage_above_base_capacity = 100 - var.spot_instance_percentage
-        spot_allocation_strategy                 = "capacity-optimized"
+    launch_template {
+      launch_template_specification {
+        launch_template_id = aws_launch_template.compute.id
+        version            = "$Latest"
       }
 
-      launch_template {
-        launch_template_specification {
-          launch_template_id = aws_launch_template.compute.id
-          version            = "$Latest"
-        }
-
-        override {
-          instance_type = var.instance_type
-        }
-
-        dynamic "override" {
-          for_each = var.spot_instance_types
-          content {
-            instance_type = override.value
-          }
+      # Override list defines the candidate pool for both On-Demand (base) and
+      # Spot (above base). The list MUST include var.instance_type (it's the
+      # primary type) plus any diversification types. AWS rejects duplicates,
+      # so dedupe via distinct().
+      dynamic "override" {
+        for_each = distinct(concat([var.instance_type], var.spot_instance_types))
+        content {
+          instance_type = override.value
         }
       }
     }
   }
+
+  capacity_rebalance = var.capacity_rebalance
 
   health_check_type         = "ELB"
   health_check_grace_period = 300

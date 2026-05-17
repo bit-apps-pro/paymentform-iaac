@@ -196,6 +196,28 @@ variable "on_demand_base_capacity" {
   default     = 0
 }
 
+variable "on_demand_percentage_above_base_capacity" {
+  description = "Percentage of on-demand instances for capacity above the base (0-100). 0 = all spot above base."
+  type        = number
+  default     = 100
+  validation {
+    condition     = var.on_demand_percentage_above_base_capacity >= 0 && var.on_demand_percentage_above_base_capacity <= 100
+    error_message = "on_demand_percentage_above_base_capacity must be between 0 and 100."
+  }
+}
+
+variable "spot_allocation_strategy" {
+  description = "Strategy for allocating spot instances (capacity-optimized, lowest-price, diversified, capacity-optimized-prioritized)"
+  type        = string
+  default     = "capacity-optimized"
+}
+
+variable "capacity_rebalance" {
+  description = "Whether to enable capacity rebalance to proactively replace instances at risk of interruption"
+  type        = bool
+  default     = false
+}
+
 variable "deploy_script_content" {
   description = "Content of the deploy script to execute on EC2 instances"
   type        = string

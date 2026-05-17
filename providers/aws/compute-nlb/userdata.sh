@@ -24,7 +24,7 @@ fi
 
 log "Starting container deployment"
 
-ENV_PATH="/etc/${service_type}.env"
+ENV_PATH="/etc/app.env"
 > "$ENV_PATH"
 
 CADDY_ENV_PATH="/etc/caddy.env"
@@ -86,6 +86,61 @@ log "Executing deploy script"
 /usr/local/bin/deploy-ec2.sh
 
 log "Container started successfully"
+
+# CloudWatch Agent — publishes mem_used_percent to CWAgent namespace so the ASG
+# can scale on memory (the relevant signal for SSR + Caddy on-demand TLS workloads).
+# aggregation_dimensions rolls per-instance metrics up by AutoScalingGroupName so
+# a single alarm covers the whole group.
+log "Installing CloudWatch Agent"
+ARCH=$(uname -m)
+if command -v rpm >/dev/null 2>&1 && ! command -v dpkg >/dev/null 2>&1; then
+  # Amazon Linux 2 / AL2023 — rpm-based
+  case "$ARCH" in
+    aarch64) CWA_URL=https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm ;;
+    x86_64)  CWA_URL=https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm ;;
+  esac
+  curl -fsSL "$CWA_URL" -o /tmp/cwa.rpm
+  rpm -U /tmp/cwa.rpm || rpm -i /tmp/cwa.rpm
+else
+  # Ubuntu/Debian — deb-based
+  case "$ARCH" in
+    aarch64) CWA_URL=https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb ;;
+    x86_64)  CWA_URL=https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb ;;
+  esac
+  curl -fsSL "$CWA_URL" -o /tmp/cwa.deb
+  dpkg -i /tmp/cwa.deb
+fi
+
+mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWA'
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "run_as_user": "root"
+  },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": {
+      "AutoScalingGroupName": "$${aws:AutoScalingGroupName}",
+      "InstanceId": "$${aws:InstanceId}"
+    },
+    "aggregation_dimensions": [["AutoScalingGroupName"]],
+    "metrics_collected": {
+      "mem": {
+        "measurement": ["mem_used_percent"],
+        "metrics_collection_interval": 60
+      }
+    }
+  }
+}
+CWA
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+  -s
+
+log "CloudWatch Agent started"
 
 %{ if tunnel_token != "" ~}
 log "Starting cloudflared tunnel connector"

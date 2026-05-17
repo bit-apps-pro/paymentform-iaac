@@ -194,6 +194,7 @@ systemctl daemon-reload
 PGCONF_FILE="$PGDATA_DIR/postgresql.conf"
 PGPASS_FILE="/var/lib/pgsql/.pgpass"
 
+install -d -o postgres -g postgres -m 0700 "$(dirname "$PGPASS_FILE")"
 install -o postgres -g postgres -m 0600 /dev/null "$PGPASS_FILE"
 printf '%s\n' "${primary_ip}:5432:replication:replicator:$(escape_pgpass_field "${db_password}")" > "$PGPASS_FILE"
 chown postgres:postgres "$PGPASS_FILE"
@@ -214,6 +215,14 @@ if [ "$NEED_BASEBACKUP" = "true" ]; then
     mkdir -p "$PGDATA_DIR"
     chown -R --no-dereference postgres:postgres "$PGDATA_DIR"
     chmod 700 "$PGDATA_DIR"
+
+    # Drop any pre-existing replication slot on primary so `pg_basebackup -C`
+    # below can recreate it idempotently. pg_hba trusts the VPC for regular
+    # SQL, so replicator can manage slots without a password.
+    log "Dropping any pre-existing replication slot 'paymentform_replica' on primary..."
+    runuser -u postgres -- psql -X -h "${primary_ip}" -p 5432 -U replicator -d postgres -tAc \
+      "SELECT pg_drop_replication_slot('paymentform_replica') FROM pg_replication_slots WHERE slot_name='paymentform_replica'" \
+      || log "slot drop returned non-zero (may have been absent)"
 
     log "Starting base backup from primary ${primary_ip}..."
     runuser -u postgres -- env PGPASSFILE="$PGPASS_FILE" pg_basebackup -D "$PGDATA_DIR" -d "host=${primary_ip} port=5432 user=replicator dbname=replication passfile=$${PGPASS_FILE}" -v -P -w -R -C --slot=paymentform_replica

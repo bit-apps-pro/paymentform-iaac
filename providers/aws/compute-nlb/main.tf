@@ -213,6 +213,13 @@ resource "aws_iam_role_policy_attachment" "ssm_instance_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Allow CloudWatch Agent to publish custom metrics (mem_used_percent) for
+# memory-based ASG scaling. Provides PutMetricData on the CWAgent namespace.
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 # Minimal custom IAM policy to allow reading SSM parameters for the backend
 resource "aws_iam_policy" "ssm_get_parameters" {
   name        = "${local.prefix}-ssm-get-parameters"
@@ -240,17 +247,21 @@ resource "aws_iam_role_policy_attachment" "ssm_get_parameters_attachment" {
   policy_arn = aws_iam_policy.ssm_get_parameters.arn
 }
 
-# CloudWatch Alarm for CPU utilization
-resource "aws_cloudwatch_metric_alarm" "cpu_utilization_high" {
-  alarm_name          = "${local.prefix}-compute-cpu-high"
+# CloudWatch Alarms on memory utilization. Renderer is SSR + Caddy on-demand TLS,
+# which is RAM-bound more reliably than CPU (especially when on burstable instances
+# where CPU% is misleading once credits drain). The `CWAgent` namespace + dimension
+# AutoScalingGroupName comes from the CloudWatch Agent config in userdata.sh, where
+# we set `aggregation_dimensions = [["AutoScalingGroupName"]]`.
+resource "aws_cloudwatch_metric_alarm" "memory_high" {
+  alarm_name          = "${local.prefix}-compute-mem-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "300"
+  metric_name         = "mem_used_percent"
+  namespace           = "CWAgent"
+  period              = "60"
   statistic           = "Average"
-  threshold           = var.scaling_cpu_threshold
-  alarm_description   = "This metric monitors EC2 instance CPU utilization"
+  threshold           = var.scaling_memory_threshold
+  alarm_description   = "Renderer ASG memory high — triggers scale up"
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.compute.name
@@ -261,16 +272,16 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization_high" {
   ]
 }
 
-resource "aws_cloudwatch_metric_alarm" "cpu_utilization_low" {
-  alarm_name          = "${local.prefix}-compute-cpu-low"
+resource "aws_cloudwatch_metric_alarm" "memory_low" {
+  alarm_name          = "${local.prefix}-compute-mem-low"
   comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "300"
+  evaluation_periods  = "10"
+  metric_name         = "mem_used_percent"
+  namespace           = "CWAgent"
+  period              = "60"
   statistic           = "Average"
-  threshold           = var.scaling_down_cpu_threshold
-  alarm_description   = "This metric monitors EC2 instance CPU utilization for scaling down"
+  threshold           = var.scaling_down_memory_threshold
+  alarm_description   = "Renderer ASG memory low — triggers scale down (longer eval to avoid flapping)"
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.compute.name

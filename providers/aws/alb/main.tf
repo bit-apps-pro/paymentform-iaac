@@ -59,7 +59,7 @@ resource "aws_lb" "this" {
 
 resource "aws_security_group" "alb" {
   name_prefix = "${var.prefix}-alb-sg"
-  description = "ALB security group — Cloudflare ingress only"
+  description = "ALB security group - Cloudflare ingress only"
   vpc_id      = var.vpc_id
 
   tags = merge(var.standard_tags, {

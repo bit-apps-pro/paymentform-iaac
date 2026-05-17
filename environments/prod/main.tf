@@ -116,8 +116,8 @@ module "postgres_primary_volume" {
   size              = 30
   volume_type       = "gp3"
   encrypted         = true
-  iops              = 3000
-  throughput        = 125
+  iops              = 4000
+  throughput        = 250
   device_name       = "/dev/sdf"
   instance_id       = ""
   standard_tags     = local.standard_tags
@@ -172,7 +172,7 @@ module "postgres_database" {
   replica_volume_size   = 20
   volume_type           = "gp3"
 
-  enable_replica   = true
+  enable_replica   = false
   postgres_version = "17"
   db_name          = var.db_database
   db_user          = var.db_username
@@ -184,7 +184,9 @@ module "postgres_database" {
   database_backup_bucket_access_key    = var.backup_storage_access_key
   pgbackrest_cipher_pass               = var.pgbackrest_cipher_pass
 
-  tunnel_token = module.tunnel_db.tunnel_token
+  # Cloudflared tunnel disabled on primary; admin access goes through SSM Session Manager.
+  # Set to "" so the userdata `if tunnel_token != ""` guard skips the cloudflared install.
+  tunnel_token = ""
 
   standard_tags = local.standard_tags
   region        = local.region
@@ -231,7 +233,7 @@ module "paymentform_backend" {
   environment                = "prod"
   instance_prefix            = "${local.resource_prefix}-backend"
   subnet_ids                 = module.paymentform_networking.public_subnet_ids
-  instance_type              = "t4g.small"
+  instance_type              = "c7g.large"
   ami_id                     = "ami-06fdf1c06301d49be"
   key_pair_name              = ""
   min_size                   = 2
@@ -251,6 +253,11 @@ module "paymentform_backend" {
   service_type    = "backend"
   ghcr_username   = var.ghcr_username
   container_image = var.backend_container_image
+  on_demand_base_capacity                  = 2
+  on_demand_percentage_above_base_capacity = 0
+  spot_instance_types                      = ["c7g.large", "c6g.large", "m7g.large", "m6g.large"]
+  spot_allocation_strategy                 = "capacity-optimized"
+  capacity_rebalance                       = true
   alb_target_group_arns = [
     module.paymentform_alb_backend.target_group_arn,
     module.paymentform_nlb_backend.https_target_group_arn,
@@ -281,7 +288,7 @@ module "paymentform_backend" {
 
     DB_CONNECTION = "pgsql"
     DB_HOST       = module.postgres_database.primary_endpoint
-    DB_PORT       = 5432
+    DB_PORT       = 6432
     DB_DATABASE   = var.db_database
     DB_USERNAME   = var.db_username
     DB_PASSWORD   = var.db_password
@@ -408,16 +415,16 @@ module "paymentform_renderer" {
   ]
 
   environment                = "prod"
-  instance_prefix            = "${local.resource_prefix}-renderer"
-  subnet_ids                 = module.paymentform_networking.public_subnet_ids
-  instance_type              = "t4g.small"
-  ami_id                     = "ami-06fdf1c06301d49be"
-  key_pair_name              = ""
-  min_size                   = 1
-  max_size                   = 4
-  desired_capacity           = 1
-  scaling_cpu_threshold      = 70
-  scaling_down_cpu_threshold = 30
+  instance_prefix               = "${local.resource_prefix}-renderer"
+  subnet_ids                    = module.paymentform_networking.public_subnet_ids
+  instance_type                 = "c7g.medium"
+  ami_id                        = "ami-06fdf1c06301d49be"
+  key_pair_name                 = ""
+  min_size                      = 1
+  max_size                      = 4
+  desired_capacity              = 1
+  scaling_memory_threshold      = 70
+  scaling_down_memory_threshold = 40
   standard_tags              = local.standard_tags
   detailed_monitoring        = true
   ebs_optimized              = true

@@ -24,7 +24,7 @@ fi
 
 log "Starting container deployment"
 
-ENV_PATH="/etc/${service_type}.env"
+ENV_PATH="/etc/app.env"
 > "$ENV_PATH"
 
 CADDY_ENV_PATH="/etc/caddy.env"
