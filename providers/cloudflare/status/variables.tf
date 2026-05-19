@@ -37,10 +37,10 @@ variable "status_subdomain" {
   default     = "status"
 }
 
-variable "kv_namespace_id" {
-  description = "Cloudflare KV namespace ID used to cache health results (30 s TTL)"
+variable "status_admin_token" {
+  description = "Admin token for incident API authentication"
   type        = string
-  default     = ""
+  sensitive   = true
 }
 
 variable "services" {

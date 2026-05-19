@@ -23,6 +23,12 @@ locals {
   services_json = jsonencode(var.services)
 }
 
+# KV namespace for incidents and health data
+resource "cloudflare_workers_kv_namespace" "incidents" {
+  account_id = var.cloudflare_account_id
+  title      = "${var.resource_prefix}-incidents"
+}
+
 # DNS record: status.{domain} → proxied through Cloudflare to the worker
 resource "cloudflare_dns_record" "status" {
   zone_id = var.cloudflare_zone_id
@@ -41,11 +47,15 @@ resource "terraform_data" "deploy_status_worker" {
   triggers_replace = [
     local.worker_name,
     local.services_json,
-    var.kv_namespace_id,
+    cloudflare_workers_kv_namespace.incidents.id,
     var.cloudflare_account_id,
     filesha256("${path.module}/worker.js"),
     filesha256("${path.module}/health.js"),
     filesha256("${path.module}/page.js"),
+    filesha256("${path.module}/auth.js"),
+    filesha256("${path.module}/feed.js"),
+    filesha256("${path.module}/incidents.js"),
+    sensitive(var.status_admin_token),
   ]
 
   provisioner "local-exec" {
@@ -53,13 +63,15 @@ resource "terraform_data" "deploy_status_worker" {
       cd ${path.module} && \
       sed -i 's/^name = ".*"/name = "${local.worker_name}"/' wrangler.toml && \
       sed -i 's/^account_id = ".*"/account_id = "${var.cloudflare_account_id}"/' wrangler.toml && \
-      sed -i 's/^id = ".*"/id = "${var.kv_namespace_id}"/' wrangler.toml && \
-      wrangler deploy
+      sed -i 's/^id = ".*"/id = "${cloudflare_workers_kv_namespace.incidents.id}"/' wrangler.toml && \
+      wrangler deploy --var "SERVICES_JSON:$SERVICES_JSON" && \
+      echo "$STATUS_ADMIN_TOKEN" | wrangler secret put ADMIN_TOKEN
     EOT
 
     environment = {
-      CF_API_TOKEN  = var.cloudflare_api_token
-      SERVICES_JSON = local.services_json
+      CF_API_TOKEN       = var.cloudflare_api_token
+      SERVICES_JSON      = local.services_json
+      STATUS_ADMIN_TOKEN = var.status_admin_token
     }
   }
 }

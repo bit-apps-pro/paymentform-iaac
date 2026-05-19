@@ -332,3 +332,9 @@ variable "acme_email" {
   type        = string
   default     = ""
 }
+
+variable "status_admin_token" {
+  description = "Admin token for status page incident API authentication"
+  type        = string
+  sensitive   = true
+}

@@ -16,6 +16,7 @@ Operational documentation for the PaymentForm production infrastructure.
 | [Savings Plans Setup](savings-plan-setup.md) | AWS Savings Plans: types, pricing, purchase steps, validation |
 | [Database Replica Setup](database-replica-setup.md) | PostgreSQL streaming replication on any cloud provider |
 | [Database Tunnel & VPN](database-tunnel-vpn.md) | Connect to PostgreSQL from remote regions via tunnel or VPN |
+| [Performance Observe & Tune](performance-observe-tune.md) | Step-by-step runbook to observe and tune backend server, PostgreSQL, and Redis |
 | [Troubleshooting](troubleshooting.md) | Common issues: EBS mount, PostgreSQL service, barman credentials, worker deployment |
 
 ## Quick Reference

@@ -57,8 +57,8 @@ aws_bucket            = "paymentform-uploads"
 
 # CORS
 cors_allowed_origins = "https://app.paymentform.io"
-cors_allowed_methods = "POST, GET, OPTIONS, PUT, DELETE"
-cors_allowed_headers = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin,X-Tenant"
+cors_allowed_methods = "POST, GET, OPTIONS, PUT, PATCH, DELETE"
+cors_allowed_headers = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin,X-Tenant,X-Embed"
 cors_exposed_headers = "Content-Disposition"
 
 # Sanctum
@@ -77,6 +77,9 @@ stripe_connect_webhook_secret = "whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # KV Store
 kv_store_api_token = "YOUR_KV_STORE_API_TOKEN"
+
+# Status Page
+status_admin_token = "set-me"
 
 # Mollie
 mollie_allowed_ips = ""

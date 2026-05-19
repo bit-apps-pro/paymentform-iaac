@@ -229,29 +229,29 @@ module "paymentform_backend" {
     module.paymentform_security
   ]
 
-  environment                = "prod"
-  instance_prefix            = "${local.resource_prefix}-backend"
-  subnet_ids                 = module.paymentform_networking.public_subnet_ids
-  instance_type              = "c7g.large"
-  ami_id                     = "ami-06fdf1c06301d49be"
-  key_pair_name              = ""
-  min_size                   = 2
-  max_size                   = 8
-  desired_capacity           = 2
-  alb_arn_suffix             = module.paymentform_alb_backend.alb_arn_suffix
-  target_group_arn_suffix    = module.paymentform_alb_backend.target_group_arn_suffix
-  standard_tags              = local.standard_tags
-  detailed_monitoring        = true
-  ebs_optimized              = true
-  root_volume_size           = 50
-  root_volume_type           = "gp3"
-  ecs_cluster_name           = "${local.resource_prefix}-cluster"
-  ecs_security_group_id      = module.paymentform_security.ecs_security_group_id
-  region                     = local.region
+  environment             = "prod"
+  instance_prefix         = "${local.resource_prefix}-backend"
+  subnet_ids              = module.paymentform_networking.public_subnet_ids
+  instance_type           = "c7g.large"
+  ami_id                  = "ami-06fdf1c06301d49be"
+  key_pair_name           = ""
+  min_size                = 2
+  max_size                = 8
+  desired_capacity        = 2
+  alb_arn_suffix          = module.paymentform_alb_backend.alb_arn_suffix
+  target_group_arn_suffix = module.paymentform_alb_backend.target_group_arn_suffix
+  standard_tags           = local.standard_tags
+  detailed_monitoring     = true
+  ebs_optimized           = true
+  root_volume_size        = 50
+  root_volume_type        = "gp3"
+  ecs_cluster_name        = "${local.resource_prefix}-cluster"
+  ecs_security_group_id   = module.paymentform_security.ecs_security_group_id
+  region                  = local.region
   # bucket_name                = module.paymentform_storage_application.bucket_names["us"]
-  service_type    = "backend"
-  ghcr_username   = var.ghcr_username
-  container_image = var.backend_container_image
+  service_type                             = "backend"
+  ghcr_username                            = var.ghcr_username
+  container_image                          = var.backend_container_image
   on_demand_base_capacity                  = 2
   on_demand_percentage_above_base_capacity = 0
   spot_instance_types                      = ["c7g.large", "c6g.large", "m7g.large", "m6g.large"]
@@ -297,7 +297,7 @@ module "paymentform_backend" {
     TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
 
     SESSION_DRIVER   = "redis"
-    SESSION_LIFETIME = 120
+    SESSION_LIFETIME = 10080
     SESSION_ENCRYPT  = false
     SESSION_PATH     = "/"
     SESSION_DOMAIN   = ".paymentform.io"
@@ -312,13 +312,18 @@ module "paymentform_backend" {
     REDIS_PORT     = "6379"
     REDIS_PASSWORD = var.redis_password
 
-    REVERB_APP_ID          = "1"
+    REVERB_APP_ID          = "1e1593236fab"
     REVERB_APP_KEY         = var.reverb_app_key
     REVERB_APP_SECRET      = var.reverb_app_secret
     REVERB_HOST            = "0.0.0.0"
     REVERB_PORT            = "8080"
     REVERB_SCHEME          = "http"
     REVERB_SCALING_ENABLED = "false"
+    # activity_timeout 30s (default) is too aggressive — connections silently drop after the
+    # client's pong cycle exceeds 30s under load. 120s gives breathing room without leaking
+    # stale connections.
+    REVERB_APP_PING_INTERVAL    = "60"
+    REVERB_APP_ACTIVITY_TIMEOUT = "120"
 
     MAIL_MAILER       = "smtp"
     MAIL_HOST         = var.mail_host
@@ -347,8 +352,8 @@ module "paymentform_backend" {
     AWS_SECRET_ACCESS_KEY_AP    = var.upload_storage_secret_access_key_ap
 
     CORS_ALLOWED_ORIGINS = "https://app.paymentform.io"
-    CORS_ALLOWED_METHODS = "POST, GET, OPTIONS, PUT, DELETE"
-    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant"
+    CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
+    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
     CORS_EXPOSED_HEADERS = "Content-Disposition"
 
     SANCTUM_STATEFUL_DOMAINS = ".paymentform.io"
@@ -398,8 +403,8 @@ module "paymentform_backend" {
     SSL_STORAGE_BUCKET_HOST          = module.paymentform_storage_ssl_config.bucket_domain
     SSL_STORAGE_BUCKET_ACCESS_KEY_ID = var.ssl_storage_access_key_id
     SSL_STORAGE_BUCKET_ACCESS_KEY    = var.ssl_storage_secret_access_key
-    NUM_THREADS    = "16"
-    OCTANE_WORKERS = "6"
+    NUM_THREADS                      = "16"
+    OCTANE_WORKERS                   = "6"
   }
 }
 
@@ -411,7 +416,7 @@ module "paymentform_renderer" {
     module.paymentform_security
   ]
 
-  environment                = "prod"
+  environment                   = "prod"
   instance_prefix               = "${local.resource_prefix}-renderer"
   subnet_ids                    = module.paymentform_networking.public_subnet_ids
   instance_type                 = "c7g.medium"
@@ -422,17 +427,17 @@ module "paymentform_renderer" {
   desired_capacity              = 1
   scaling_memory_threshold      = 70
   scaling_down_memory_threshold = 40
-  standard_tags              = local.standard_tags
-  detailed_monitoring        = true
-  ebs_optimized              = true
-  root_volume_size           = 20
-  root_volume_type           = "gp3"
-  ecs_cluster_name           = "${local.resource_prefix}-cluster"
-  ecs_security_group_id      = module.paymentform_security.ecs_security_group_id
-  region                     = local.region
-  service_type               = "renderer"
-  ghcr_username              = var.ghcr_username
-  container_image            = var.renderer_container_image
+  standard_tags                 = local.standard_tags
+  detailed_monitoring           = true
+  ebs_optimized                 = true
+  root_volume_size              = 20
+  root_volume_type              = "gp3"
+  ecs_cluster_name              = "${local.resource_prefix}-cluster"
+  ecs_security_group_id         = module.paymentform_security.ecs_security_group_id
+  region                        = local.region
+  service_type                  = "renderer"
+  ghcr_username                 = var.ghcr_username
+  container_image               = var.renderer_container_image
   alb_target_group_arns = [
     module.paymentform_nlb_renderer.https_target_group_arn,
     module.paymentform_nlb_renderer.http_target_group_arn,
@@ -711,26 +716,15 @@ module "hetzner_backend_hel1" {
     TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
 
     SESSION_DRIVER   = "redis"
-    SESSION_LIFETIME = "120"
+    SESSION_LIFETIME = "10080"
     SESSION_ENCRYPT  = "false"
     SESSION_PATH     = "/"
     SESSION_DOMAIN   = ""
 
-    BROADCAST_CONNECTION   = "reverb"
-    REVERB_APP_ID          = "1"
-    REVERB_APP_KEY         = var.reverb_app_key
-    REVERB_APP_SECRET      = var.reverb_app_secret
-    REVERB_HOST            = "0.0.0.0"
-    REVERB_PORT            = "8080"
-    REVERB_SCHEME          = "http"
-    REVERB_SCALING_ENABLED = "false"
-    FILESYSTEM_DISK        = "local"
-    QUEUE_CONNECTION       = "sqs"
-    CACHE_STORE            = "redis"
-
-    SQS_QUEUE_CONNECTION = "default"
-    SQS_PREFIX           = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
-    SQS_SUFFIX           = ""
+    BROADCAST_CONNECTION = "reverb"
+    FILESYSTEM_DISK      = "local"
+    QUEUE_CONNECTION     = "sqs"
+    CACHE_STORE          = "redis"
 
     REDIS_CLIENT   = "phpredis"
     REDIS_HOST     = "10.1.0.10"
@@ -764,8 +758,8 @@ module "hetzner_backend_hel1" {
     AWS_SECRET_ACCESS_KEY_AP    = var.upload_storage_secret_access_key_ap
 
     CORS_ALLOWED_ORIGINS = "https://app.paymentform.io"
-    CORS_ALLOWED_METHODS = "POST, GET, OPTIONS, PUT, DELETE"
-    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant"
+    CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
+    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
     CORS_EXPOSED_HEADERS = "Content-Disposition"
 
     SANCTUM_STATEFUL_DOMAINS = ".paymentform.io"
@@ -784,13 +778,18 @@ module "hetzner_backend_hel1" {
     KV_STORE_API_TOKEN    = var.kv_store_api_token
     KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
 
-    REVERB_APP_ID          = "1"
+    REVERB_APP_ID          = "1e1593236fab"
     REVERB_APP_KEY         = var.reverb_app_key
     REVERB_APP_SECRET      = var.reverb_app_secret
     REVERB_HOST            = "0.0.0.0"
     REVERB_PORT            = "8080"
     REVERB_SCHEME          = "http"
     REVERB_SCALING_ENABLED = "false"
+    # activity_timeout 30s (default) is too aggressive — connections silently drop after the
+    # client's pong cycle exceeds 30s under load. 120s gives breathing room without leaking
+    # stale connections.
+    REVERB_APP_PING_INTERVAL    = "60"
+    REVERB_APP_ACTIVITY_TIMEOUT = "120"
 
     SQS_QUEUE_CONNECTION = "sqs"
     SQS_PREFIX           = "paymentform"
@@ -908,26 +907,15 @@ module "hetzner_backend_sin1" {
     TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
 
     SESSION_DRIVER   = "redis"
-    SESSION_LIFETIME = "120"
+    SESSION_LIFETIME = "10080"
     SESSION_ENCRYPT  = "false"
     SESSION_PATH     = "/"
     SESSION_DOMAIN   = ""
 
-    BROADCAST_CONNECTION   = "reverb"
-    REVERB_APP_ID          = "1"
-    REVERB_APP_KEY         = var.reverb_app_key
-    REVERB_APP_SECRET      = var.reverb_app_secret
-    REVERB_HOST            = "0.0.0.0"
-    REVERB_PORT            = "8080"
-    REVERB_SCHEME          = "http"
-    REVERB_SCALING_ENABLED = "false"
-    FILESYSTEM_DISK        = "local"
-    QUEUE_CONNECTION       = "sqs"
-    CACHE_STORE            = "redis"
-
-    SQS_QUEUE_CONNECTION = "default"
-    SQS_PREFIX           = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
-    SQS_SUFFIX           = ""
+    BROADCAST_CONNECTION = "reverb"
+    FILESYSTEM_DISK      = "local"
+    QUEUE_CONNECTION     = "sqs"
+    CACHE_STORE          = "redis"
 
     REDIS_CLIENT   = "phpredis"
     REDIS_HOST     = "10.1.0.10"
@@ -961,8 +949,8 @@ module "hetzner_backend_sin1" {
     AWS_SECRET_ACCESS_KEY_AP    = var.upload_storage_secret_access_key_ap
 
     CORS_ALLOWED_ORIGINS = "https://app.paymentform.io"
-    CORS_ALLOWED_METHODS = "POST, GET, OPTIONS, PUT, DELETE"
-    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant"
+    CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
+    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
     CORS_EXPOSED_HEADERS = "Content-Disposition"
 
     SANCTUM_STATEFUL_DOMAINS = ".paymentform.io"
@@ -981,13 +969,18 @@ module "hetzner_backend_sin1" {
     KV_STORE_API_TOKEN    = var.kv_store_api_token
     KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
 
-    REVERB_APP_ID          = "1"
+    REVERB_APP_ID          = "1e1593236fab"
     REVERB_APP_KEY         = var.reverb_app_key
     REVERB_APP_SECRET      = var.reverb_app_secret
     REVERB_HOST            = "0.0.0.0"
     REVERB_PORT            = "8080"
     REVERB_SCHEME          = "http"
     REVERB_SCALING_ENABLED = "false"
+    # activity_timeout 30s (default) is too aggressive — connections silently drop after the
+    # client's pong cycle exceeds 30s under load. 120s gives breathing room without leaking
+    # stale connections.
+    REVERB_APP_PING_INTERVAL    = "60"
+    REVERB_APP_ACTIVITY_TIMEOUT = "120"
 
     SQS_QUEUE_CONNECTION = "sqs"
     SQS_PREFIX           = "paymentform"
@@ -1080,7 +1073,7 @@ module "paymentform_status" {
   cloudflare_zone_id    = var.cloudflare_zone_id
   domain_name           = "paymentform.io"
   status_subdomain      = "status"
-  kv_namespace_id       = module.paymentform_kv_store.namespace_id
+  status_admin_token    = var.status_admin_token
 
   services = [
     {
@@ -1089,11 +1082,11 @@ module "paymentform_status" {
     },
     {
       name       = "Renderer"
-      health_url = "https://renderer.paymentform.io/api/health"
+      health_url = "https://renderer.paymentform.io/health"
     },
     {
       name       = "Client"
-      health_url = "https://app.paymentform.io/api/health"
+      health_url = "https://app.paymentform.io"
     },
   ]
 }

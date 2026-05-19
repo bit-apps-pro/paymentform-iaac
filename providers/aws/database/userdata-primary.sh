@@ -324,8 +324,8 @@ echo "max_replication_slots = 3" >> "$PGCONF_FILE"
 echo "wal_level = replica" >> "$PGCONF_FILE"
 echo "hot_standby = on" >> "$PGCONF_FILE"
 echo "archive_mode = on" >> "$PGCONF_FILE"
-echo "archive_command = 'AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required AWS_ACCESS_KEY_ID=${database_backup_bucket_access_key_id} AWS_SECRET_ACCESS_KEY=${database_backup_bucket_access_key} barman-cloud-wal-archive --cloud-provider aws-s3 --endpoint-url ${database_backup_bucket_endpoint} s3://${database_backup_bucket_name}/postgresql ${environment}-postgresql-primary %p'" >> "$PGCONF_FILE"
-echo "archive_timeout = 300" >> "$PGCONF_FILE"
+echo "archive_command = 'AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required AWS_ACCESS_KEY_ID=${database_backup_bucket_access_key_id} AWS_SECRET_ACCESS_KEY=${database_backup_bucket_access_key} barman-cloud-wal-archive --cloud-provider aws-s3 --endpoint-url ${database_backup_bucket_endpoint} --gzip s3://${database_backup_bucket_name}/postgresql ${environment}-postgresql-primary %p'" >> "$PGCONF_FILE"
+echo "archive_timeout = 43200" >> "$PGCONF_FILE"
 
 if ! grep -q '^# === BEGIN MANAGED TUNING ===' "$PGCONF_FILE" 2>/dev/null; then
 cat >> "$PGCONF_FILE" <<'PG_TUNING'
@@ -571,15 +571,15 @@ if [ "$RESTORE_BACKUP_VAL" = "false" ]; then
       AWS_RESPONSE_CHECKSUM_VALIDATION=when_required \
       AWS_ACCESS_KEY_ID="${database_backup_bucket_access_key_id}" \
       AWS_SECRET_ACCESS_KEY="${database_backup_bucket_access_key}" \
-      barman-cloud-backup $BARMAN_COMMON_OPTS "$BARMAN_DESTINATION" "$BARMAN_SERVER_NAME" || log "Initial backup failed"
+      barman-cloud-backup $BARMAN_COMMON_OPTS --gzip "$BARMAN_DESTINATION" "$BARMAN_SERVER_NAME" || log "Initial backup failed"
 fi
 
 BARMAN_ENV="AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required AWS_ACCESS_KEY_ID=${database_backup_bucket_access_key_id} AWS_SECRET_ACCESS_KEY=${database_backup_bucket_access_key}"
-BARMAN_BACKUP_CMD="$BARMAN_ENV barman-cloud-backup $BARMAN_COMMON_OPTS $BARMAN_DESTINATION $BARMAN_SERVER_NAME"
-BARMAN_CLEANUP_CMD="$BARMAN_ENV barman-cloud-backup-delete $BARMAN_COMMON_OPTS --retention-policy 'RECOVERY WINDOW OF 15 DAYS' $BARMAN_DESTINATION $BARMAN_SERVER_NAME"
+BARMAN_BACKUP_CMD="$BARMAN_ENV barman-cloud-backup $BARMAN_COMMON_OPTS --gzip $BARMAN_DESTINATION $BARMAN_SERVER_NAME"
+BARMAN_CLEANUP_CMD="$BARMAN_ENV barman-cloud-backup-delete $BARMAN_COMMON_OPTS --retention-policy 'RECOVERY WINDOW OF 7 DAYS' $BARMAN_DESTINATION $BARMAN_SERVER_NAME"
 cat > /etc/cron.d/barman-backup <<CRON
 0 2 * * * postgres $BARMAN_BACKUP_CMD >> /var/log/barman-backup.log 2>&1
 30 2 * * * postgres $BARMAN_CLEANUP_CMD >> /var/log/barman-backup.log 2>&1
 CRON
 chmod 644 /etc/cron.d/barman-backup
-log "Nightly barman backup + 15-day retention cleanup cron configured (02:00/02:30 UTC)"
+log "Nightly barman backup + 7-day retention cleanup cron configured (02:00/02:30 UTC)"
