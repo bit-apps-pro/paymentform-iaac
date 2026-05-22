@@ -126,7 +126,7 @@ resource "aws_instance" "postgresql_primary" {
     MOUNT_POINT                          = "/mnt/postgresql"
     PGDATA_DIR                           = "/mnt/postgresql/data"
     peer_vpc_cidrs_hba                   = join("\n", [for cidr in var.peer_vpc_cidrs : "host  replication  replicator  ${cidr}  scram-sha-256\nhost  all  all  ${cidr}  md5"])
-    hetzner_cidrs_hba                    = join("\n", [for cidr in var.hetzner_cidr_blocks : "host  all  all  ${cidr}  scram-sha-256"])
+    admin_db_password                    = var.admin_db_password
     tunnel_token                         = var.tunnel_token
   }))
 

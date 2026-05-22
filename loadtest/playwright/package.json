@@ -1,0 +1,18 @@
+{
+  "name": "paymentform-dev-loadtest",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Playwright dev full-flow stress test for paymentform-docker. Runs N parallel browser contexts through signup -> verify -> provision -> form create -> Stripe Connect OAuth -> render -> submit.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0",
+    "dotenv": "^16.4.7"
+  }
+}

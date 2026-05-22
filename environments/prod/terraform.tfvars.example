@@ -79,7 +79,10 @@ stripe_connect_webhook_secret = "whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 kv_store_api_token = "YOUR_KV_STORE_API_TOKEN"
 
 # Status Page
-status_admin_token = "set-me"
+status_admin_token              = "set-me"
+status_log_ingest_token         = "set-me"
+status_admin_allowed_countries  = "BD"
+status_admin_allowed_ips        = "119.10.168.198"
 
 # Mollie
 mollie_allowed_ips = ""
@@ -128,6 +131,22 @@ backup_storage_access_key     = "YOUR_R2_BACKUP_SECRET_KEY"
 # pgBackrest Configuration
 # ----------------------------------------------------------------------------
 pgbackrest_cipher_pass = "YOUR_PGBACKREST_CIPHER_PASSWORD"
+
+# ----------------------------------------------------------------------------
+# Admin App (Hetzner) — Database Credentials
+# ----------------------------------------------------------------------------
+# Password for the `paymentform_admin` role on the AWS primary DB
+# (admin's secondary "primary" connection for tenant-data reads).
+admin_db_password = "YOUR_ADMIN_PRIMARY_DB_PASSWORD"
+
+# Password for the `admin` superuser of the LOCAL postgres on the Hetzner
+# admin box (admin's default DB connection — owns users/sessions/audit).
+admin_local_db_password = "YOUR_ADMIN_LOCAL_DB_PASSWORD"
+
+# Password for the `barman_replica` role on the LOCAL postgres.
+# Used by barman-cloud-backup (running on the host, weekly cron) for
+# pg_basebackup streaming to R2. No application uses this.
+admin_backup_replication_password = "YOUR_ADMIN_BACKUP_REPLICATION_PASSWORD"
 
 # ----------------------------------------------------------------------------
 # Cloudflare Configuration

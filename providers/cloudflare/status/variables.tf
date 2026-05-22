@@ -43,6 +43,24 @@ variable "status_admin_token" {
   sensitive   = true
 }
 
+variable "log_ingest_token" {
+  description = "Write-only token for backend services to ship logs into the worker's D1 logs table"
+  type        = string
+  sensitive   = true
+}
+
+variable "admin_allowed_countries" {
+  description = "CSV of ISO-3166 country codes allowed to access /admin/*. Empty = unrestricted (token-gated only). CF-IPCountry is the source."
+  type        = string
+  default     = "BD"
+}
+
+variable "admin_allowed_ips" {
+  description = "CSV of IPv4 addresses and CIDR ranges allowed to access /admin/*. Empty = unrestricted (rely on country+token). CF-Connecting-IP is the source."
+  type        = string
+  default     = ""
+}
+
 variable "services" {
   description = "List of services to monitor. Each entry: { name = string, health_url = string }"
   type = list(object({

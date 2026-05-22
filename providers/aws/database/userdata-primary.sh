@@ -380,7 +380,10 @@ echo "host     all             all             127.0.0.1/32          scram-sha-2
 echo "host     replication     replicator      10.0.0.0/16           md5" >> $PG_HBA_SYSTEM_FILE
 echo "host     replication     replicator      127.0.0.1/32          md5" >> $PG_HBA_SYSTEM_FILE
 ${peer_vpc_cidrs_hba}
-${hetzner_cidrs_hba}
+%{ if admin_db_password != "" ~}
+# Hetzner admin server reaches primary via public IP; SG enforces source IP allowlist
+echo "host     all             paymentform_admin       0.0.0.0/0             scram-sha-256" >> $PG_HBA_SYSTEM_FILE
+%{ endif ~}
 
 systemctl enable postgresql
 systemctl start postgresql
@@ -573,6 +576,76 @@ if [ "$RESTORE_BACKUP_VAL" = "false" ]; then
       AWS_SECRET_ACCESS_KEY="${database_backup_bucket_access_key}" \
       barman-cloud-backup $BARMAN_COMMON_OPTS --gzip "$BARMAN_DESTINATION" "$BARMAN_SERVER_NAME" || log "Initial backup failed"
 fi
+
+# === Create admin user for Hetzner admin app ===
+%{ if admin_db_password != "" ~}
+log "Creating paymentform_admin user for Hetzner admin app..."
+
+# Stage the password through a quoted heredoc so shell never interprets `$`,
+# backticks, or backslashes in the value. Trailing newline from the heredoc
+# is stripped before use.
+ADMIN_PASS_TMP=$(mktemp)
+chmod 600 "$ADMIN_PASS_TMP"
+cat > "$ADMIN_PASS_TMP" <<'ADMIN_PASS_EOF'
+${admin_db_password}
+ADMIN_PASS_EOF
+ADMIN_PASS_VAR=$(cat "$ADMIN_PASS_TMP")
+rm -f "$ADMIN_PASS_TMP"
+
+# psql -v binds :'admin_pass' with proper quoting on the server side; this
+# is the only safe way to pass an arbitrary password into SQL.
+sudo -u postgres psql -d ${db_name} -v ON_ERROR_STOP=1 -v admin_pass="$ADMIN_PASS_VAR" <<'ADMIN_SQL'
+-- Create role conditionally (CREATE ROLE has no IF NOT EXISTS).
+SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'paymentform_admin') AS role_exists \gset
+\if :role_exists
+\echo 'paymentform_admin role already exists, leaving password as-is'
+\else
+CREATE ROLE paymentform_admin WITH LOGIN PASSWORD :'admin_pass';
+\endif
+
+-- Connect/schema usage
+GRANT CONNECT ON DATABASE ${db_name} TO paymentform_admin;
+GRANT USAGE ON SCHEMA public TO paymentform_admin;
+
+-- Default privileges for FUTURE tables/sequences created by ${db_user}
+-- (the backend role that runs migrations). Without this, any table created
+-- after admin role creation would be inaccessible.
+-- NOTE: this currently grants full CRUD on every future table including
+-- `tenant`. The intended restriction (SELECT(data) only on tenant) must be
+-- re-applied AFTER backend migrations create the tenant table — typically
+-- via a one-shot deploy hook. See TODO in environments/prod/main.tf.
+ALTER DEFAULT PRIVILEGES FOR ROLE ${db_user} IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO paymentform_admin;
+ALTER DEFAULT PRIVILEGES FOR ROLE ${db_user} IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO paymentform_admin;
+
+-- Apply grants to any tables that already exist (idempotent on fresh boot).
+DO $$
+DECLARE
+    r record;
+BEGIN
+    FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != 'tenant'
+    LOOP
+        EXECUTE 'GRANT ALL ON TABLE public.' || quote_ident(r.tablename) || ' TO paymentform_admin';
+    END LOOP;
+END
+$$;
+
+-- Tenant restriction — only effective if tenant table exists at bootstrap;
+-- on a fresh primary it won't, so the post-migration hook above must apply it.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'tenant') THEN
+        EXECUTE 'REVOKE ALL ON TABLE public.tenant FROM paymentform_admin';
+        EXECUTE 'GRANT SELECT(data) ON TABLE public.tenant TO paymentform_admin';
+    END IF;
+END
+$$;
+ADMIN_SQL
+
+unset ADMIN_PASS_VAR
+log "paymentform_admin user created (tenant restriction pending post-migration hook)"
+%{ endif ~}
 
 BARMAN_ENV="AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required AWS_ACCESS_KEY_ID=${database_backup_bucket_access_key_id} AWS_SECRET_ACCESS_KEY=${database_backup_bucket_access_key}"
 BARMAN_BACKUP_CMD="$BARMAN_ENV barman-cloud-backup $BARMAN_COMMON_OPTS --gzip $BARMAN_DESTINATION $BARMAN_SERVER_NAME"

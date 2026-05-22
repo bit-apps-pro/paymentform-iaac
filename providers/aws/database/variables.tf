@@ -260,8 +260,9 @@ variable "volume_ids" {
   default     = {}
 }
 
-variable "hetzner_cidr_blocks" {
-  description = "CIDR blocks of Hetzner backend servers to allow in pg_hba.conf"
-  type        = list(string)
-  default     = []
+variable "admin_db_password" {
+  description = "Password for the paymentform_admin user (used by Hetzner admin app)"
+  type        = string
+  sensitive   = true
+  default     = ""
 }

@@ -1,80 +1,169 @@
 export default {
-  async fetch(request, env, ctx) {
-    return handleRequest(request, env, ctx);
+  async fetch(request, env) {
+    return handleRequest(request, env);
   }
 };
 
-async function handleRequest(request, env, ctx) {
+async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.slice(1);
 
   if (request.method === 'OPTIONS') {
-    return handleCorsPreflight(request, env);
+    return handleCorsPreflight();
   }
 
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method not allowed', {
       status: 405,
-      headers: getCorsHeaders(request, env)
+      headers: getCorsHeaders(),
     });
   }
 
   if (!isPublicPath(path)) {
     return new Response('Not found', {
       status: 404,
-      headers: getCorsHeaders(request, env)
+      headers: getCorsHeaders(),
     });
   }
 
   try {
-    const object = await env.R2_BUCKET.get(path);
+    const headObject = await env.R2_BUCKET.head(path);
+
+    if (!headObject) {
+      return new Response('File not found', {
+        status: 404,
+        headers: getCorsHeaders(),
+      });
+    }
+
+    // Conditional request: serve 304 when the client already has current bytes.
+    // Saves a full R2 read + response body on every browser revalidation against
+    // the long max-age cache.
+    const notModified = isNotModified(request, headObject);
+    if (notModified) {
+      return new Response(null, {
+        status: 304,
+        headers: buildResponseHeaders(headObject, path, { includeContentLength: false }),
+      });
+    }
+
+    const rangeHeader = request.headers.get('Range');
+    const rangeSpec = rangeHeader ? parseRange(rangeHeader, headObject.size) : null;
+
+    if (rangeHeader && !rangeSpec) {
+      return new Response('Range not satisfiable', {
+        status: 416,
+        headers: {
+          ...getCorsHeaders(),
+          'Content-Range': `bytes */${headObject.size}`,
+        },
+      });
+    }
+
+    const getOptions = rangeSpec
+      ? { range: { offset: rangeSpec.start, length: rangeSpec.end - rangeSpec.start + 1 } }
+      : undefined;
+    const object = await env.R2_BUCKET.get(path, getOptions);
 
     if (!object) {
       return new Response('File not found', {
         status: 404,
-        headers: getCorsHeaders(request, env)
+        headers: getCorsHeaders(),
       });
     }
 
-    const headers = new Headers({
-      ...getCorsHeaders(request, env),
-      'Content-Type': object.httpMetadata?.contentType || getContentType(path),
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      'ETag': object.httpEtag,
-      'Last-Modified': object.uploaded.toUTCString(),
-    });
+    const headers = buildResponseHeaders(object, path, { includeContentLength: true });
 
-    if (object.size) {
-      headers.set('Content-Length', object.size.toString());
+    if (rangeSpec) {
+      headers.set('Content-Range', `bytes ${rangeSpec.start}-${rangeSpec.end}/${headObject.size}`);
+      headers.set('Content-Length', String(rangeSpec.end - rangeSpec.start + 1));
+      return new Response(object.body, { status: 206, headers });
     }
 
-    if (request.headers.has('Range')) {
-      return await handleRangeRequest(request, object, headers);
-    }
-
-    return new Response(object.body, {
-      status: 200,
-      headers,
-    });
-
+    return new Response(object.body, { status: 200, headers });
   } catch (error) {
     console.error('Error fetching from R2:', error);
     return new Response('Internal server error', {
       status: 500,
-      headers: getCorsHeaders(request, env)
+      headers: getCorsHeaders(),
     });
   }
 }
 
-function handleCorsPreflight(request, env) {
-  const headers = getCorsHeaders(request, env);
+function buildResponseHeaders(object, path, { includeContentLength }) {
+  const headers = new Headers(getCorsHeaders());
+  headers.set('Content-Type', object.httpMetadata?.contentType || getContentType(path));
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  headers.set('ETag', object.httpEtag);
+  headers.set('Last-Modified', object.uploaded.toUTCString());
+  headers.set('Accept-Ranges', 'bytes');
+  if (includeContentLength && object.size != null) {
+    headers.set('Content-Length', String(object.size));
+  }
+  return headers;
+}
 
+function isNotModified(request, object) {
+  const ifNoneMatch = request.headers.get('If-None-Match');
+  if (ifNoneMatch) {
+    const tags = ifNoneMatch.split(',').map(t => t.trim());
+    if (tags.includes(object.httpEtag) || tags.includes('*')) {
+      return true;
+    }
+  }
+
+  const ifModifiedSince = request.headers.get('If-Modified-Since');
+  if (ifModifiedSince) {
+    const since = Date.parse(ifModifiedSince);
+    if (!Number.isNaN(since) && object.uploaded.getTime() <= since) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Parse RFC 7233 `Range: bytes=...`. Returns null when unsatisfiable or
+// malformed. Supports a single byte range plus the suffix form `bytes=-N`.
+function parseRange(rangeHeader, size) {
+  if (!size) return null;
+
+  const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) return null;
+
+  const startRaw = match[1];
+  const endRaw = match[2];
+
+  let start;
+  let end;
+
+  if (startRaw === '' && endRaw === '') {
+    return null;
+  }
+
+  if (startRaw === '') {
+    const suffixLength = parseInt(endRaw, 10);
+    if (suffixLength <= 0) return null;
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = parseInt(startRaw, 10);
+    end = endRaw === '' ? size - 1 : parseInt(endRaw, 10);
+  }
+
+  if (Number.isNaN(start) || Number.isNaN(end)) return null;
+  if (start > end || start >= size) return null;
+
+  return { start, end: Math.min(end, size - 1) };
+}
+
+function handleCorsPreflight() {
   return new Response(null, {
     status: 204,
     headers: {
-      ...headers,
+      ...getCorsHeaders(),
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Range',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Range, If-None-Match, If-Modified-Since',
       'Access-Control-Max-Age': '86400',
     },
   });
@@ -85,12 +174,10 @@ function isPublicPath(path) {
   return parts.length >= 4 && parts[1] === 'public';
 }
 
-function getCorsHeaders(request, env) {
-  const headers = {
+function getCorsHeaders() {
+  return {
     'Access-Control-Allow-Origin': '*',
   };
-
-  return headers;
 }
 
 function getContentType(path) {
@@ -120,51 +207,4 @@ function getContentType(path) {
   };
 
   return contentTypes[ext] || 'application/octet-stream';
-}
-
-async function handleRangeRequest(request, object, headers) {
-  const range = request.headers.get('Range');
-  const size = object.size;
-
-  if (!range || !size) {
-    return new Response(object.body, { status: 200, headers });
-  }
-
-  const matches = range.match(/bytes=(\d+)-(\d*)/);
-  if (!matches) {
-    return new Response('Invalid range', {
-      status: 416,
-      headers: { ...headers, 'Content-Range': `bytes */${size}` }
-    });
-  }
-
-  const start = parseInt(matches[1], 10);
-  const end = matches[2] ? parseInt(matches[2], 10) : size - 1;
-  const clampedEnd = Math.min(end, size - 1);
-
-  if (start >= size || start > clampedEnd) {
-    return new Response('Range not satisfiable', {
-      status: 416,
-      headers: { ...headers, 'Content-Range': `bytes */${size}` }
-    });
-  }
-
-  const rangedObject = await env.R2_BUCKET.get(object.key, {
-    range: { offset: start, length: clampedEnd - start + 1 },
-  });
-
-  if (!rangedObject) {
-    return new Response('Range not satisfiable', {
-      status: 416,
-      headers: { ...headers, 'Content-Range': `bytes */${size}` }
-    });
-  }
-
-  headers.set('Content-Range', `bytes ${start}-${clampedEnd}/${size}`);
-  headers.set('Content-Length', (clampedEnd - start + 1).toString());
-
-  return new Response(rangedObject.body, {
-    status: 206,
-    headers,
-  });
 }

@@ -1,0 +1,18 @@
+[
+  {
+    "_comment": "User in tenant ACME. tenant_render_base_url is the renderer subdomain (NextJS), distinct from api_base_url which routes to the backend.",
+    "user_id": "01HABC1234567890ABCDEF0001",
+    "tenant_id": "acme-corp",
+    "token": "1|REPLACEME_sanctum_plain_text_token_here",
+    "api_base_url": "https://api.paymentform.io",
+    "tenant_render_base_url": "https://acme-corp.paymentform.io"
+  },
+  {
+    "_comment": "User in tenant WIDGETS",
+    "user_id": "01HABC1234567890ABCDEF0002",
+    "tenant_id": "widgets-inc",
+    "token": "2|REPLACEME_sanctum_plain_text_token_here",
+    "api_base_url": "https://api.paymentform.io",
+    "tenant_render_base_url": "https://widgets-inc.paymentform.io"
+  }
+]

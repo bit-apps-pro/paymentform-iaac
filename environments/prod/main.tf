@@ -10,7 +10,7 @@ terraform {
     }
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 5.16.0"
+      version = "~> 5.19"
     }
     hcloud = {
       source  = "hetznercloud/hcloud"
@@ -69,6 +69,18 @@ resource "aws_ssm_parameter" "ghcr_token" {
   lifecycle {
     prevent_destroy = false
   }
+}
+
+# =============================================================================
+# Cloudflare R2 — Admin DB backups (barman-cloud-backup target)
+# =============================================================================
+# Dedicated bucket for the local PostgreSQL instance running on the Hetzner
+# admin server. Separate from the primary DB's pgbackrest bucket so retention
+# policies and access can evolve independently. Reuses existing
+# `backup_storage_*` R2 credentials — no new tokens.
+resource "cloudflare_r2_bucket" "admin_db_backup" {
+  account_id = var.cloudflare_account_id
+  name       = "prod-admin-db-backup"
 }
 
 # =============================================================================
@@ -191,7 +203,8 @@ module "postgres_database" {
   region        = local.region
   assign_eip    = true
 
-  peer_vpc_cidrs = var.peer_vpc_cidrs
+  peer_vpc_cidrs    = var.peer_vpc_cidrs
+  admin_db_password = var.admin_db_password
 
   volumes = []
   volume_ids = {
@@ -389,6 +402,8 @@ module "paymentform_backend" {
     ALERT_SLACK_WEBHOOK_URL = ""
     ALERT_WEBHOOK_URL       = ""
     ALERT_WEBHOOK_SECRET    = ""
+    STATUS_LOG_INGEST_URL   = "https://status.paymentform.io/api/logs/batch"
+    STATUS_LOG_INGEST_TOKEN = var.status_log_ingest_token
     }, module.postgres_database.replica_endpoint != null ? {
     DB_HOST_WRITE = module.postgres_database.primary_endpoint
     DB_HOST_READ  = module.postgres_database.replica_endpoint
@@ -405,6 +420,11 @@ module "paymentform_backend" {
     SSL_STORAGE_BUCKET_ACCESS_KEY    = var.ssl_storage_secret_access_key
     NUM_THREADS                      = "16"
     OCTANE_WORKERS                   = "6"
+    OCTANE_ENABLED                   = false
+    CADDY_SERVER_LOG_LEVEL           = "warn"
+    CADDY_SERVER_ADMIN_PORT          = "2019"
+    CADDY_SERVER_ADMIN_HOST          = "localhost"
+    CADDY_SERVER_LOGGER              = "json"
   }
 }
 
@@ -640,6 +660,120 @@ module "hetzner_network_ap" {
   ip_range        = "10.20.0.0/16"
   subnet_ip_range = "10.20.1.0/24"
   standard_tags   = local.standard_tags
+}
+
+# =============================================================================
+# Hetzner — EU Admin (HEL1 Helsinki) - Admin app (Traefik + admin + valkey)
+# =============================================================================
+module "hetzner_admin_hel1" {
+  source = "../../providers/hetzner/admin-server"
+
+  enabled            = false
+  environment        = "prod"
+  resource_prefix    = "paymentform-p-eu-admin"
+  region             = "eu-hel1"
+  location           = "hel1"
+  server_type        = "ccx13"
+  server_image       = "ubuntu-24.04"
+  ssh_key_id         = local.hetzner_ssh_key_id
+  os_user_public_key = var.hetzner_ssh_public_key
+  os_username        = "paymentform"
+  admin_cidr_blocks  = var.admin_cidr_blocks
+  ghcr_username      = var.ghcr_username
+  ghcr_token         = var.ghcr_token
+  network_id         = tostring(module.hetzner_network_eu.network_id)
+
+  admin_image          = var.admin_container_image
+  traefik_host         = var.traefik_host
+  acme_email           = var.acme_email
+  cloudflare_api_token = var.cloudflare_api_token
+  valkey_password      = var.valkey_password
+
+  # Local postgres on the admin box (admin's own data: users, sessions, audit)
+  local_db_database = "paymentform_admin"
+  local_db_username = "admin"
+  local_db_password = var.admin_local_db_password
+
+  # Weekly barman-cloud-backup of the local postgres to a dedicated R2 bucket.
+  # Reuses the existing backup_storage_* credentials (single R2 token covers
+  # both pgbackrest and barman use cases).
+  backup_replication_password = var.admin_backup_replication_password
+  backup_bucket_name          = cloudflare_r2_bucket.admin_db_backup.name
+  backup_bucket_endpoint      = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
+  backup_bucket_access_key_id = var.backup_storage_access_key_id
+  backup_bucket_access_key    = var.backup_storage_access_key
+
+  deploy_script_content = file("${path.module}/../../../admin/.github/scripts/deploy-hetzner.sh")
+  compose_file_content  = file("${path.module}/../../../admin/docker-compose.yml")
+
+  admin_container_env_vars = {
+    APP_NAME  = "Payment Form Admin"
+    APP_ENV   = "production"
+    APP_URL   = "https://admin.${var.traefik_host}"
+    APP_KEY   = var.app_key
+    APP_DEBUG = "false"
+
+    LOG_CHANNEL              = "stack"
+    LOG_STACK                = "single"
+    LOG_DEPRECATIONS_CHANNEL = ""
+    LOG_LEVEL                = "error"
+
+    # Default Laravel connection -> local postgres (admin's own data:
+    # users, sessions, audit). Reached over the traefik-public docker network
+    # by container DNS name `postgres`.
+    DB_CONNECTION = "pgsql"
+    DB_HOST       = "postgres"
+    DB_PORT       = "5432"
+    DB_DATABASE   = "paymentform_admin"
+    DB_USERNAME   = "admin"
+    DB_PASSWORD   = var.admin_local_db_password
+
+    # Secondary connection -> AWS primary (tenant-data reads).
+    # Bound in admin/config/database.php as `connections.primary`. Uses the
+    # restricted paymentform_admin role created at primary bootstrap.
+    PRIMARY_DB_CONNECTION = "pgsql"
+    PRIMARY_DB_HOST       = module.postgres_database.primary_public_ip
+    PRIMARY_DB_PORT       = "5432"
+    PRIMARY_DB_DATABASE   = var.db_database
+    PRIMARY_DB_USERNAME   = "paymentform_admin"
+    PRIMARY_DB_PASSWORD   = var.admin_db_password
+
+    SESSION_DRIVER   = "redis"
+    SESSION_LIFETIME = "10080"
+    SESSION_PATH     = "/"
+    SESSION_DOMAIN   = "admin.${var.traefik_host}"
+
+    REDIS_CLIENT   = "phpredis"
+    REDIS_HOST     = "valkey"
+    REDIS_PORT     = "6379"
+    REDIS_PASSWORD = var.valkey_password
+
+    MAIL_MAILER       = "smtp"
+    MAIL_HOST         = var.mail_host
+    MAIL_USERNAME     = var.mail_username
+    MAIL_PASSWORD     = var.mail_password
+    MAIL_PORT         = "587"
+    MAIL_FROM_ADDRESS = "hello@paymentform.io"
+    MAIL_FROM_NAME    = "Payment Form"
+
+    CORS_ALLOWED_ORIGINS = "https://admin.${var.traefik_host}"
+    CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
+    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin"
+  }
+
+  standard_tags = local.standard_tags
+}
+
+# Allow admin server to reach primary PostgreSQL (avoids cycle via module inputs)
+resource "aws_security_group_rule" "postgresql_ingress_from_admin" {
+  count             = module.hetzner_admin_hel1.enabled ? 1 : 0
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  cidr_blocks       = ["${module.hetzner_admin_hel1.ipv4_address}/32"]
+  security_group_id = module.paymentform_security.postgresql_security_group_id
+  description       = "Allow PostgreSQL from Hetzner admin server"
 }
 
 # =============================================================================
@@ -1065,15 +1199,18 @@ module "paymenform_dns" {
 module "paymentform_status" {
   source = "../../providers/cloudflare/status"
 
-  environment           = "prod"
-  resource_prefix       = local.resource_prefix
-  standard_tags         = local.standard_tags
-  cloudflare_account_id = var.cloudflare_account_id
-  cloudflare_api_token  = var.cloudflare_api_token
-  cloudflare_zone_id    = var.cloudflare_zone_id
-  domain_name           = "paymentform.io"
-  status_subdomain      = "status"
-  status_admin_token    = var.status_admin_token
+  environment             = "prod"
+  resource_prefix         = local.resource_prefix
+  standard_tags           = local.standard_tags
+  cloudflare_account_id   = var.cloudflare_account_id
+  cloudflare_api_token    = var.cloudflare_api_token
+  cloudflare_zone_id      = var.cloudflare_zone_id
+  domain_name             = "paymentform.io"
+  status_subdomain        = "status"
+  status_admin_token      = var.status_admin_token
+  log_ingest_token        = var.status_log_ingest_token
+  admin_allowed_countries = var.status_admin_allowed_countries
+  admin_allowed_ips       = var.status_admin_allowed_ips
 
   services = [
     {

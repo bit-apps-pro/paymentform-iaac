@@ -95,3 +95,8 @@ output "service_token_secret" {
   value       = module.tunnel_db.service_token_secret
   sensitive   = true
 }
+
+output "hetzner_admin_hel1_ip" {
+  description = "Public IPv4 address of the Hetzner admin server in hel1"
+  value       = module.hetzner_admin_hel1.ipv4_address
+}

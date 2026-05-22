@@ -1,0 +1,26 @@
+[
+  {
+    "_comment": "User A in tenant ACME. user_id can be id or uuid — whichever /me returns.",
+    "user_id": "01HABC1234567890ABCDEF0001",
+    "tenant_id": "acme-corp",
+    "token": "1|REPLACEME_sanctum_plain_text_token_here",
+    "api_base_url": "https://api.dev.paymentform.io",
+    "tenant_base_url": "https://acme-corp.api.dev.paymentform.io"
+  },
+  {
+    "_comment": "User B in tenant WIDGETS",
+    "user_id": "01HABC1234567890ABCDEF0002",
+    "tenant_id": "widgets-inc",
+    "token": "2|REPLACEME_sanctum_plain_text_token_here",
+    "api_base_url": "https://api.dev.paymentform.io",
+    "tenant_base_url": "https://widgets-inc.api.dev.paymentform.io"
+  },
+  {
+    "_comment": "User C in tenant ACME (same tenant as A — covers same-tenant cross-user too)",
+    "user_id": "01HABC1234567890ABCDEF0003",
+    "tenant_id": "acme-corp",
+    "token": "3|REPLACEME_sanctum_plain_text_token_here",
+    "api_base_url": "https://api.dev.paymentform.io",
+    "tenant_base_url": "https://acme-corp.api.dev.paymentform.io"
+  }
+]

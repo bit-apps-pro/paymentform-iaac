@@ -21,7 +21,7 @@ apt-get install -y docker.io curl
 
 %{ if os_user_public_key != "" ~}
 log "Creating OS user: ${os_username}"
-id "${os_username}" &>/dev/null || useradd -m -s /bin/bash "${os_username} && passwd -d ${os_username}"
+id "${os_username}" &>/dev/null || (useradd -m -s /bin/bash "${os_username}" && passwd -d "${os_username}")
 
 for grp in docker; do
   if getent group "$grp" >/dev/null 2>&1; then
@@ -49,7 +49,7 @@ chmod +x /usr/local/bin/docker-compose
 
 log "Logging into GHCR"
 echo "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin
-${os_username}
+
 log "Creating app directories"
 mkdir -p /opt/app/data/backend /opt/app/data/renderer /opt/app/data/valkey /opt/app/data/caddy /opt/app/conf
 echo "data/*"  > /opt/app/.dockerignore

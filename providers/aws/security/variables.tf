@@ -80,8 +80,3 @@ variable "alb_security_group_ids" {
   default     = []
 }
 
-variable "hetzner_cidr_blocks" {
-  description = "CIDR blocks of Hetzner backend servers to allow PostgreSQL access from"
-  type        = list(string)
-  default     = []
-}

@@ -60,6 +60,12 @@ variable "renderer_container_image" {
   default = "ghcr.io/bit-apps-pro/paymentform-renderer:latest"
 }
 
+variable "admin_container_image" {
+  description = "Container image for the admin app"
+  type        = string
+  default     = "ghcr.io/bit-apps-pro/paymentform-admin:latest"
+}
+
 variable "stripe_public_key" {
   type    = string
   default = ""
@@ -94,9 +100,33 @@ variable "redis_password" {
   sensitive = true
 }
 
+variable "valkey_password" {
+  description = "Password for the local Valkey instance on the Hetzner admin server"
+  type        = string
+  sensitive   = true
+}
+
 variable "db_password" {
   type      = string
   sensitive = true
+}
+
+variable "admin_db_password" {
+  description = "Password for the paymentform_admin user (used by Hetzner admin app to connect to primary DB)"
+  type        = string
+  sensitive   = true
+}
+
+variable "admin_local_db_password" {
+  description = "Password for the admin app's LOCAL PostgreSQL instance (the `admin` superuser of paymentform_admin DB running on the Hetzner admin server)"
+  type        = string
+  sensitive   = true
+}
+
+variable "admin_backup_replication_password" {
+  description = "Password for the `barman_replica` role on the LOCAL admin PostgreSQL. Used by barman-cloud-backup (running on the host) to perform pg_basebackup streaming."
+  type        = string
+  sensitive   = true
 }
 
 variable "tenant_db_auth_token" {
@@ -337,4 +367,22 @@ variable "status_admin_token" {
   description = "Admin token for status page incident API authentication"
   type        = string
   sensitive   = true
+}
+
+variable "status_log_ingest_token" {
+  description = "Write-only token shared with the backend to POST logs to status.paymentform.io/api/logs"
+  type        = string
+  sensitive   = true
+}
+
+variable "status_admin_allowed_countries" {
+  description = "CSV of ISO country codes allowed to reach status.paymentform.io/admin/*. Empty = unrestricted."
+  type        = string
+  default     = "BD"
+}
+
+variable "status_admin_allowed_ips" {
+  description = "CSV of IPv4 addresses and CIDRs allowed to reach status.paymentform.io/admin/*. Empty = unrestricted."
+  type        = string
+  default     = ""
 }
