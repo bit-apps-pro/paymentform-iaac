@@ -37,3 +37,7 @@ terraform.tfvars
 tofu.plan
 .infracost/
 cost-estimate*
+security-checkov*
+*node_modules*
+*.wrangler*
+.dev.vars

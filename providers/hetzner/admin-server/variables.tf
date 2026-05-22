@@ -81,12 +81,6 @@ variable "acme_email" {
   type        = string
 }
 
-variable "cloudflare_api_token" {
-  description = "Cloudflare API token for Traefik DNS-01 challenge"
-  type        = string
-  sensitive   = true
-}
-
 variable "valkey_password" {
   description = "Password for the local Valkey instance"
   type        = string

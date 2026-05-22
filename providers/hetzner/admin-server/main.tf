@@ -48,7 +48,6 @@ locals {
     "ADMIN_IMAGE=${var.admin_image}",
     "TRAEFIK_HOST=${var.traefik_host}",
     "ACME_EMAIL=${var.acme_email}",
-    "CLOUDFLARE_API_TOKEN=${var.cloudflare_api_token}",
     "VALKEY_PASSWORD=${var.valkey_password}",
     "LOCAL_DB_DATABASE=${var.local_db_database}",
     "LOCAL_DB_USERNAME=${var.local_db_username}",
@@ -117,11 +116,17 @@ resource "hcloud_firewall" "admin" {
   }
 
   rule {
-    description     = "Allow HTTP from Cloudflare"
+    # Open :80 to the world so Let's Encrypt validators can hit
+    # /.well-known/acme-challenge/* (HTTP-01). Traefik redirects all
+    # non-ACME requests on :80 to :443, so this does not widen the
+    # application surface — :443 stays Cloudflare-only below. LE
+    # publishes its validator pool dynamically and does not offer a
+    # stable CIDR list, so per-IP scoping is not viable.
+    description     = "Allow HTTP for ACME HTTP-01 challenge"
     direction       = "in"
     protocol        = "tcp"
     port            = "80"
-    source_ips      = local.edge_source_ips
+    source_ips      = ["0.0.0.0/0", "::/0"]
     destination_ips = []
   }
 

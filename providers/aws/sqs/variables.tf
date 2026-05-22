@@ -35,9 +35,19 @@ variable "dlq_max_receive_count" {
 }
 
 variable "visibility_timeout_seconds" {
-  description = "Visibility timeout. Must exceed the longest worker --timeout (currently 300s on exports). Default 600 leaves headroom for retries."
+  description = "Default visibility timeout for any queue not listed in `queue_visibility_overrides`. Must exceed that queue's worker --timeout. 600 leaves headroom for the slowest worker (exports at 300s)."
   type        = number
   default     = 600
+}
+
+variable "queue_visibility_overrides" {
+  description = "Per-queue visibility timeout (seconds). Lookup by logical queue name; queues not listed fall back to `visibility_timeout_seconds`. Use to tighten the redelivery window on short-running queues so a stuck job retries sooner. Each override MUST be >= that queue's worker --timeout, otherwise SQS re-delivers mid-execution and the job runs twice."
+  type        = map(number)
+  default     = {}
+  validation {
+    condition     = alltrue([for v in values(var.queue_visibility_overrides) : v >= 30 && v <= 43200])
+    error_message = "Per-queue visibility timeouts must be between 30 and 43200 seconds (SQS hard limits)."
+  }
 }
 
 variable "message_retention_seconds" {

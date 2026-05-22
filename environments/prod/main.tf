@@ -249,8 +249,21 @@ module "paymentform_sqs" {
   # Laravel SQS driver appends `SQS_SUFFIX` to every dispatched queue name to
   # build the URL — AWS resources MUST be named to match. Suffix (not prefix)
   # is the only Laravel-supported namespacing knob.
-  name_suffix   = "-${local.resource_prefix}"
-  queues        = ["default", "webhooks", "exports", "tenant-provisioning"]
+  name_suffix = "-${local.resource_prefix}"
+  queues      = ["default", "webhooks", "exports", "tenant-provisioning"]
+
+  # Per-queue visibility timeout = 2x worker --timeout (defined in
+  # backend/.docker/*/Dockerfile.backend-base SUPERVISOR_*_QUEUE_COMMAND).
+  # Headroom for jobs that legitimately straddle the timeout boundary while
+  # still recovering quickly when a worker crashes mid-job. Without overrides
+  # every queue would inherit the module default (600s) and a stuck 90s job
+  # would block redelivery for 10 minutes.
+  queue_visibility_overrides = {
+    default             = 180 # 2 * 90
+    webhooks            = 180 # 2 * 90
+    exports             = 600 # 2 * 300
+    tenant-provisioning = 360 # 2 * 180
+  }
   standard_tags = local.standard_tags
 }
 
@@ -554,6 +567,9 @@ module "paymentform_renderer" {
     SSL_STORAGE_BUCKET_HOST          = module.paymentform_storage_ssl_config.bucket_domain
     SSL_STORAGE_BUCKET_ACCESS_KEY_ID = var.ssl_storage_access_key_id
     SSL_STORAGE_BUCKET_ACCESS_KEY    = var.ssl_storage_secret_access_key
+    KV_STORE_BASE_URL                = "https://paymentform-tenant-validator-prod.bitapps.workers.dev"
+    KV_STORE_NAMESPACE_ID            = module.paymentform_kv_store.namespace_id
+    KV_STORE_API_TOKEN               = var.kv_store_api_token
     DOMAIN                           = "paymentform.io"
     NODE_ENV                         = "production"
     ENVIRONMENT                      = "production"
@@ -737,7 +753,7 @@ module "hetzner_network_ap" {
 module "hetzner_admin_hel1" {
   source = "../../providers/hetzner/admin-server"
 
-  enabled            = false
+  enabled            = true
   environment        = "prod"
   resource_prefix    = "paymentform-p-eu-admin"
   region             = "eu-hel1"
@@ -752,11 +768,10 @@ module "hetzner_admin_hel1" {
   ghcr_token         = var.ghcr_token
   network_id         = tostring(module.hetzner_network_eu.network_id)
 
-  admin_image          = var.admin_container_image
-  traefik_host         = var.traefik_host
-  acme_email           = var.acme_email
-  cloudflare_api_token = var.cloudflare_api_token
-  valkey_password      = var.valkey_password
+  admin_image     = var.admin_container_image
+  traefik_host    = var.traefik_host
+  acme_email      = var.acme_email
+  valkey_password = var.valkey_password
 
   # Local postgres on the admin box (admin's own data: users, sessions, audit)
   local_db_database = "paymentform_admin"

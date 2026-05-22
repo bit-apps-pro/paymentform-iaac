@@ -16,7 +16,7 @@ resource "aws_sqs_queue" "dlq" {
 
   name                       = "${each.value}${var.name_suffix}-dlq"
   message_retention_seconds  = var.dlq_message_retention_seconds
-  visibility_timeout_seconds = var.visibility_timeout_seconds
+  visibility_timeout_seconds = lookup(var.queue_visibility_overrides, each.value, var.visibility_timeout_seconds)
   receive_wait_time_seconds  = var.receive_wait_time_seconds
 
   kms_master_key_id                 = var.kms_master_key_id
@@ -38,7 +38,7 @@ resource "aws_sqs_queue" "main" {
 
   name                       = "${each.value}${var.name_suffix}"
   message_retention_seconds  = var.message_retention_seconds
-  visibility_timeout_seconds = var.visibility_timeout_seconds
+  visibility_timeout_seconds = lookup(var.queue_visibility_overrides, each.value, var.visibility_timeout_seconds)
   receive_wait_time_seconds  = var.receive_wait_time_seconds
 
   kms_master_key_id                 = var.kms_master_key_id
