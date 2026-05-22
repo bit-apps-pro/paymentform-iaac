@@ -4,20 +4,31 @@ Operational documentation for the PaymentForm production infrastructure.
 
 ## Guides
 
+### Critical playbooks (read first when on-call)
+
+| Guide | Description |
+|-------|-------------|
+| [Disaster Recovery](disaster-recovery.md) | RTO/RPO targets, scenarios for node loss / primary loss / region loss / data loss, step-by-step recovery + issues |
+| [Autoscaling](autoscaling.md) | Backend + renderer ASGs: monitor, manual scale, instance refresh, userdata sync, pre-event checklist, issues |
+| [DB Replication (Ops)](db-replication.md) | Monitor lag, restart replica, re-attach after failover, switch upstream, drop replica, weekly health check |
+| [DB Backup](db-backup.md) | pgbackrest + barman-cloud schedules, verify, manual backup, PITR restore, cipher rotation, drill, issues |
+| [Troubleshooting](troubleshooting.md) | Common issues: EBS mount, PostgreSQL service, barman credentials, worker deployment |
+
+### Setup & infrastructure references
+
 | Guide | Description |
 |-------|-------------|
 | [Deployment](deploy.md) | Prerequisites, bootstrap, plan/apply workflow, rollback, GitHub Actions |
 | [Backend & Renderer Deploy](backend-deploy.md) | EC2/Hetzner backend deploy, container images, GitHub Actions, rollback |
 | [Database Operations](database-operations.md) | PostgreSQL setup, EBS mount, replica promotion, barman backup/restore, WAL archiving |
+| [Database Replica Setup](database-replica-setup.md) | PostgreSQL streaming replication on any cloud provider (initial setup) |
+| [Database Tunnel & VPN](database-tunnel-vpn.md) | Connect to PostgreSQL from remote regions via tunnel or VPN |
 | [CDN & R2 Storage](cdn-storage.md) | R2 buckets, CDN workers, S3-compatible API, adding regions |
 | [CDN Worker](cdn-worker.md) | Regional CDN workers, R2 bucket binding, domain routing, configuration |
 | [DNS & Routing](dns.md) | Cloudflare DNS records, geo-routing, WAF, rate limiting, cache rules, tunnel |
 | [Client Dashboard](client.md) | Cloudflare Container deployment, image updates, env vars |
+| [Performance Observe & Tune](performance-observe-tune.md) | Step-by-step runbook to observe and tune backend, PostgreSQL, Redis |
 | [Savings Plans Setup](savings-plan-setup.md) | AWS Savings Plans: types, pricing, purchase steps, validation |
-| [Database Replica Setup](database-replica-setup.md) | PostgreSQL streaming replication on any cloud provider |
-| [Database Tunnel & VPN](database-tunnel-vpn.md) | Connect to PostgreSQL from remote regions via tunnel or VPN |
-| [Performance Observe & Tune](performance-observe-tune.md) | Step-by-step runbook to observe and tune backend server, PostgreSQL, and Redis |
-| [Troubleshooting](troubleshooting.md) | Common issues: EBS mount, PostgreSQL service, barman credentials, worker deployment |
 
 ## Quick Reference
 

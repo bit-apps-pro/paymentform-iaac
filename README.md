@@ -1,330 +1,376 @@
-# Infrastructure as Code - PaymentForm
+# Infrastructure as Code — PaymentForm
 
-OpenTofu/Terraform infrastructure with AWS backend, Cloudflare Containers for client/renderer, and Cloudflare R2 for storage.
+OpenTofu/Terraform managing PaymentForm's production stack across **AWS (us-east-1)**, **Cloudflare** (R2, Workers, KV, Containers, DNS, Tunnels, D1), and **Hetzner** (EU/AP replicas + admin server).
+
+Single env: `environments/prod` (us-east-1). Provider modules live under `providers/<cloud>/<service>` and are composed from `environments/prod/main.tf`.
 
 ## Quick Start
 
 ```bash
-# 1. Set environment variables
-cp .envrc.example .envrc
-# Edit .envrc with your secrets
-source .envrc
-
-# 2. Initialize
-make init
-
-# 3. Review changes
-make plan
-
-# 4. Deploy
-make apply
+cd environments/prod
+cp terraform.tfvars.example terraform.tfvars   # fill in secrets
+tofu init                                       # or: make init
+tofu plan                                       # or: make plan
+tofu apply                                      # or: make apply
 ```
 
 ## Common Commands
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `make plan` | Generate execution plan | `make plan` |
-| `make apply` | Apply planned changes | `make apply` |
-| `make cost-estimate` | Estimate monthly costs | `make cost-estimate` |
-| `make state-list` | List all resources | `make state-list` |
-| `make output` | Show outputs | `make output` |
-| `make validate` | Validate configuration | `make validate` |
-| `make fmt` | Format all .tf files | `make fmt` |
+| Command | Description |
+|---|---|
+| `make init` | Initialize OpenTofu (downloads providers) |
+| `make plan` | Generate execution plan |
+| `make apply` | Apply planned changes |
+| `make cost-estimate` | Estimate monthly costs (writes `cost-estimate-prod.json`) |
+| `make state-list` | List all resources in state |
+| `make output` | Print module outputs |
+| `make validate` | Validate `.tf` syntax |
+| `make fmt` | `terraform fmt` recursively |
 
-## Structure
+## Repository Layout
 
 ```
 iaac/
-├── providers/              # Cloud provider modules
-│   ├── aws/
-│   │   ├── compute/       # EC2 backend
-│   │   ├── networking/    # VPC, subnets
-│   │   ├── security/      # Security groups
-│   │   └── volume/        # EBS volumes
-│   └── cloudflare/
-│       ├── containers/    # Cloudflare Containers
-│       ├── dns/           # DNS, WAF, rate limiting
-│       ├── r2/            # R2 buckets + SSL config
-│       ├── kv/            # KV namespaces
-│       └── status/        # Status page worker
-│
 ├── environments/
-│   └── prod/              # Single production environment (us-east-1)
-│       ├── main.tf        # All modules wired together
-│       ├── variables.tf
-│       ├── outputs.tf
-│       └── terraform.tfvars
-│
-├── .envrc.example          # Environment variables template
-└── Makefile                # Common commands (make help)
+│   └── prod/                   # Wires every module — main.tf, tfvars, outputs
+├── providers/
+│   ├── aws/
+│   │   ├── acm/                # ACM cert (api.*) via Cloudflare DNS validation
+│   │   ├── alb/                # Application LB → backend (WS-safe, sticky)
+│   │   ├── nlb/                # Network LB → renderer
+│   │   ├── compute-alb/        # Backend ASG behind ALB
+│   │   ├── compute-nlb/        # Renderer ASG behind NLB
+│   │   ├── database/           # PostgreSQL primary + replica EC2 + pgbouncer
+│   │   ├── valkey/             # Valkey/Redis EC2 instance
+│   │   ├── volume/             # EBS data volumes
+│   │   ├── networking/         # VPC, subnets, IGW, NAT
+│   │   ├── security/           # SGs, IAM
+│   │   ├── ssm/                # Encrypted parameter store helper
+│   │   ├── vpc-peering/        # Cross-region VPC peering scaffold
+│   │   ├── cloudtrail/         # Audit trail
+│   │   └── route53-failover/   # DNS-level failover scaffold
+│   ├── cloudflare/
+│   │   ├── containers/         # Client (Next.js SSR) + renderer containers
+│   │   ├── dns/                # Records, WAF, rate limits, cache rules
+│   │   ├── loadbalancer/       # CF LB for origin pools
+│   │   ├── r2/
+│   │   │   ├── application-storage/  # paymentform-uploads-{us,eu,ap}
+│   │   │   ├── ssl-config/           # Caddy cert persistence
+│   │   │   ├── public-files/         # Public asset bucket
+│   │   │   ├── cdn-worker/           # Worker + custom-domain (cdn-{us,eu,ap})
+│   │   │   └── worker/               # Worker source (index.js)
+│   │   ├── kv/                 # Tenant session/state namespace
+│   │   ├── status/             # Status page worker + D1 logs + KV incidents
+│   │   ├── tunnel/             # General-purpose tunnels
+│   │   └── tunnel-db/          # Postgres 5432 → Hetzner via tunnel
+│   └── hetzner/
+│       ├── admin-server/       # Admin app (Traefik + admin + valkey, hel1)
+│       ├── server/             # Backend nodes (hel1, sin1) — currently dormant
+│       ├── database/           # Postgres replica nodes (hel1, sin1)
+│       ├── valkey/             # Valkey instances
+│       └── network/            # Hetzner private networks
+├── ansible/                    # Post-provision configuration
+├── bootstrap/                  # First-run bootstrap (state backend, etc.)
+├── loadtest/                   # k6 + Playwright load/E2E harness
+├── scripts/                    # Operational helpers
+└── docs/                       # Runbooks (deploy, db ops, CDN, DNS, …)
 ```
 
-## Architecture
+## High-Level Architecture
 
+```mermaid
+flowchart LR
+    subgraph User["User Browser"]
+        U[Visitor / Customer]
+        A[Admin]
+    end
+
+    subgraph CF["Cloudflare Edge (anycast)"]
+        DNS[DNS + WAF + Rate Limit]
+        Status["status.* (Worker + D1)"]
+        CDN["cdn-{us,eu,ap}.* (Workers)"]
+        Client["app.* — Container (Next.js SSR)"]
+        Renderer["*.renderer.* — Container (Caddy + Next.js)"]
+        Tunnel["cloudflared tunnel (db-tunnel.*)"]
+        KV[(KV — tenants)]
+        D1[(D1 — status logs)]
+    end
+
+    subgraph AWS["AWS us-east-1"]
+        ALB[ALB — api.*]
+        Backend["Backend ASG (Laravel/FrankenPHP + nginx)"]
+        NLB[NLB — renderer pool]
+        PG[(Postgres primary + replica<br/>pgbouncer)]
+        Valkey[(Valkey)]
+        SSM[(SSM Parameter Store)]
+    end
+
+    subgraph R2["Cloudflare R2 (multi-region)"]
+        Uploads[paymentform-uploads-us/eu/ap]
+        SSL[ssl-config bucket]
+        Backups[admin-db-backup, db-backups]
+    end
+
+    subgraph HZ["Hetzner"]
+        Admin["admin.* — admin-server (hel1)<br/>Traefik + admin + valkey + local PG"]
+        ReplicaEU[("PG replica (hel1)")]
+        ReplicaAP[("PG replica (sin1)")]
+    end
+
+    U --> DNS
+    A --> DNS
+    DNS --> Client
+    DNS --> Renderer
+    DNS --> Status
+    DNS --> CDN
+    DNS --> ALB
+    DNS --> Admin
+
+    Client -.session.-> KV
+    Renderer --> SSL
+    Status --> D1
+    Status --> KV
+
+    ALB --> Backend
+    Backend --> PG
+    Backend --> Valkey
+    Backend --> SSM
+    Backend -- presigned + write --> Uploads
+    Backend -- log batch --> Status
+
+    CDN -- R2 binding --> Uploads
+
+    Tunnel -- 5432 --> PG
+    ReplicaEU -- pulls WAL --> Tunnel
+    ReplicaAP -- pulls WAL --> Tunnel
+
+    Admin --> Backups
+    PG -- pgbackrest --> Backups
 ```
-                                    ┌─────────────────────────────┐
-                                    │      Cloudflare             │
-                                    │       Containers            │
-                                    │                             │
-                                    │  ┌───────────────────────┐  │
-┌─────────────────┐                 │  │  Client Container     │  │
-│   Cloudflare    │                 │  │  (Next.js SSR)        │  │
-│      DNS        │─────────────────│  └───────────────────────┘  │
-│                 │                 │  ┌───────────────────────┐  │
-│  - api.*        │─────────────────│  │  Renderer Container   │  │
-│  - app.*        │                 │  │  (Next.js + Caddy)    │  │
-│  - *.renderer.* │                 │  └───────────────────────┘  │
-└─────────────────┘                 └─────────────────────────────┘
-                                              ▲
-┌─────────────────┐   ┌───────────────────────┼───────────────────────┐
-│      AWS        │   │              Cloudflare R2 (Multi-Region)     │
-│   (Backend)     │   │  ┌─────────────────────────────────────────┐  │
-│                 │   │  │  - paymentform-uploads-us (wnam)       │  │
-│  ┌───────────┐  │   │  │  - paymentform-uploads-eu (weur)       │  │
-│  │   EC2     │  │◄──┤  │  - paymentform-uploads-ap (apac)       │  │
-│  │  (API)    │  │   │  │  - SSL Config Bucket                   │  │
-│  └───────────┘  │   │  └─────────────────────────────────────────┘  │
-│  ┌───────────┐  │   └───────────────────────────────────────────────┘
-│  │   SSM     │◄─┘
-│  │  Secrets  │         ┌──────────────────────────────┐
-│  └───────────┘         │       Cloudflare KV          │
-└─────────────────┘      │  - Tenants Namespace         │
-                         └──────────────────────────────┘
-┌─────────────────┐
-│    Hetzner      │
-│   (Backend)     │
-│                 │
-│  ┌───────────┐  │
-│  │  cx22     │  │
-│  │  (hel1)   │  │
-│  └───────────┘  │
-│  ┌───────────┐  │
-│  │  cx22     │  │
-│  │  (sin1)   │  │
-│  └───────────┘  │
-└─────────────────┘
+
+## Request Flow — Backend API
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant CF as Cloudflare (DNS+WAF)
+    participant ALB as AWS ALB (api.*)
+    participant EC2 as Backend ASG (Laravel)
+    participant PGB as pgbouncer
+    participant PG as Postgres primary
+    participant VK as Valkey
+    participant R2 as R2 uploads
+
+    C->>CF: HTTPS api.paymentform.io
+    CF->>CF: WAF + rate-limit
+    CF->>ALB: TLS via ACM (CF-only ingress SG)
+    ALB->>EC2: HTTP, sticky
+    EC2->>PGB: SQL
+    PGB->>PG: pooled conn
+    EC2->>VK: session/cache
+    EC2->>R2: presign / write upload
+    EC2-->>C: JSON
+    EC2-)CF: POST status logs batch (Worker)
 ```
 
-## Key Features
+## Request Flow — CDN
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Client** | Cloudflare Containers | Next.js SSR dashboard |
-| **Renderer** | Cloudflare Containers | Next.js + Caddy for wildcard TLS |
-| **Backend (AWS)** | EC2 Auto Scaling Group | Laravel/FrankenPHP API (us-east-1) |
-| **Backend (EU/AP)** | Hetzner Cloud | Laravel/FrankenPHP API (hel1, sin1) |
-| **Storage** | Cloudflare R2 | Multi-region file uploads (US/EU/AP) + SSL certs |
-| **CDN** | Cloudflare Workers | Regional CDN workers (cdn-us/eu/ap) |
-| **Secrets** | AWS SSM | Encrypted parameters |
-| **KV Store** | Cloudflare KV | Tenant session/state storage |
-| **Deploy** | GitHub Actions | Automated image deploy to running instances |
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant CF as Cloudflare Edge
+    participant W as cdn-{region} Worker
+    participant R2 as R2 bucket (region jurisdiction)
+
+    B->>CF: GET cdn-eu.paymentform.io/{tenant}/public/...
+    CF->>W: dispatch (workers_custom_domain)
+    W->>W: validate path: parts[1]=='public', len≥4
+    W->>R2: HEAD (metadata)
+    alt If-None-Match matches httpEtag
+        W-->>B: 304 Not Modified
+    else Range header
+        W->>R2: GET(range)
+        W-->>B: 206 Partial Content + Accept-Ranges
+    else Plain GET
+        W->>R2: GET
+        W-->>B: 200 + Cache-Control max-age=31536000 immutable
+    end
+```
+
+## Database Replication
+
+```mermaid
+flowchart LR
+    PG[(AWS primary<br/>us-east-1)]
+    PGR[(AWS replica<br/>us-east-1 AZ-b)]
+    Tunnel[cloudflared<br/>db-tunnel.paymentform.io]
+    HEL[(Hetzner replica hel1<br/>streaming)]
+    SIN[(Hetzner replica sin1<br/>streaming)]
+    R2B[(R2: db-backups<br/>pgbackrest)]
+
+    PG -- WAL stream --> PGR
+    PG -- expose 5432 --> Tunnel
+    Tunnel -- WAL pull --> HEL
+    Tunnel -- WAL pull --> SIN
+    PG -- nightly --> R2B
+```
+
+## Components
+
+| Component | Module | Domain / Endpoint | Notes |
+|---|---|---|---|
+| Backend API | `aws/compute-alb` + `aws/alb` | `api.paymentform.io` | Laravel/FrankenPHP, ASG, ACM via CF DNS validation, CF-only ingress |
+| Renderer | `aws/compute-nlb` + `aws/nlb` | `*.renderer.paymentform.io` | Caddy + Next.js, NLB, wildcard TLS via R2-stored certs |
+| Client (Dashboard) | `cloudflare/containers` | `app.paymentform.io` | Cloudflare Container, Next.js SSR |
+| Admin App | `hetzner/admin-server` | `admin.paymentform.io` | hel1, Traefik + admin + valkey + local PG (barman → R2) |
+| Postgres primary | `aws/database` | private | pgbouncer in front, EBS data volume, pgbackrest → R2 |
+| Postgres replicas | `hetzner/database` × 2 | private | hel1 + sin1, WAL via CF tunnel |
+| Valkey | `aws/valkey` | private | Session/queue/cache |
+| Uploads (R2) | `cloudflare/r2/application-storage` | s3-compatible | `paymentform-uploads-{us,eu,ap}`; eu lives in `eu` jurisdiction |
+| CDN | `cloudflare/r2/cdn-worker` | `cdn-{us,eu,ap}.paymentform.io` | Worker reads R2; supports 304, byte ranges, suffix ranges |
+| Status Page | `cloudflare/status` | `status.paymentform.io` | Worker + D1 (log ingest) + KV (incidents); admin UI gated by `ADMIN_TOKEN` + IP/country ACL |
+| KV (tenants) | `cloudflare/kv` | n/a | Tenant session/state |
+| DB Tunnel | `cloudflare/tunnel-db` | `db-tunnel.paymentform.io` | cloudflared exposing 5432 for Hetzner replicas |
+| DNS / WAF | `cloudflare/dns` | zone-wide | Records, rate limits, WAF, cache rules |
+| ACM cert | `aws/acm` | `api.*` | DNS-01 via Cloudflare |
+| CF LB | `cloudflare/loadbalancer` | configurable | Origin pools / health checks |
 
 ## Prerequisites
 
-- OpenTofu/Terraform >= 1.8
-- AWS CLI configured
-- Cloudflare API token (permissions: Workers Scripts/Routes, Container Registry, R2, DNS)
+- **OpenTofu** ≥ 1.8 (or Terraform-compatible) and `make`
+- **AWS CLI** with `us-east-1` access
+- **Cloudflare API token** with scopes: Workers Scripts, Workers KV, Workers Routes, Workers R2, D1, DNS, Container Registry, SSL/TLS
+- **Hetzner Cloud token** (`hcloud_token`)
+- **GHCR PAT** (`read:packages`) for image pulls
 
-## Required Variables
+## Required Variables (subset)
 
-```bash
-# Cloudflare
-export TF_VAR_cloudflare_api_token="..."
-export TF_VAR_cloudflare_account_id="..."
-export TF_VAR_cloudflare_zone_id="..."
+Set in `environments/prod/terraform.tfvars`. Full list in `terraform.tfvars.example`.
 
-# Containers
-export TF_VAR_client_container_image="ghcr.io/org/client:latest"
-export TF_VAR_renderer_container_image="ghcr.io/org/renderer:latest"
-export TF_VAR_ghcr_token="..."
+```hcl
+cloudflare_api_token   = "..."
+cloudflare_account_id  = "..."
+cloudflare_zone_id     = "..."
+hcloud_token           = "..."
 
-# R2 SSL Config
-export TF_VAR_ssl_storage_access_key_id="..."
-export TF_VAR_ssl_storage_secret_access_key="..."
+# Container images (GHCR)
+client_container_image   = "ghcr.io/bit-apps-pro/paymentform-client:vX.Y.Z"
+renderer_container_image = "ghcr.io/bit-apps-pro/paymentform-renderer:vX.Y.Z"
+backend_container_image  = "ghcr.io/bit-apps-pro/paymentform-backend:vX.Y.Z"
 
 # Database
-export TF_VAR_neon_database_url="..."
-export TF_VAR_turso_api_token="..."
+db_password         = "..."
+admin_db_password   = "..."           # primary's superuser → tunnel/replicas
+admin_local_db_password = "..."       # Hetzner admin server local PG
+pgbackrest_cipher_pass  = "..."
+
+# Storage (S3-compatible R2)
+upload_storage_access_key_id     = "..."
+upload_storage_secret_access_key = "..."
+ssl_storage_access_key_id        = "..."
+ssl_storage_secret_access_key    = "..."
+backup_storage_access_key_id     = "..."
+backup_storage_access_key        = "..."
+
+# Status page
+status_admin_token            = "..."
+status_log_ingest_token       = "..."
+status_admin_allowed_countries = "US,GB,..."
+status_admin_allowed_ips      = "1.2.3.4,..."
 ```
 
-See `.envrc.example` for full list.
+## Provider Versions
 
-## Container Images
+Pinned across modules:
 
-**Client (Next.js SSR):**
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY .next/standalone ./
-COPY .next/static ./.next/static
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
+| Provider | Constraint |
+|---|---|
+| `cloudflare/cloudflare` | `~> 5.19` |
+| `hashicorp/aws` | `~> 5.0` |
+| `hetznercloud/hcloud` | `~> 1.49` |
+| `hashicorp/null`, `random`, `archive`, `http` | `~> 3.0` / `~> 2.0` |
 
-**Renderer (Next.js + Caddy):**
-```dockerfile
-FROM caddy:2-alpine
-COPY Caddyfile /etc/caddy/Caddyfile
-COPY --from=client /app/.next/standalone /srv/app
-EXPOSE 443
-```
-
-## R2 SSL Config
-
-Renderer stores Caddy certificates in R2 for persistence across restarts:
-
-```bash
-R2_SSL_BUCKET_NAME=sandbox-paymentform-ssl-config
-R2_SSL_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
-R2_SSL_ACCESS_KEY_ID=...
-R2_SSL_SECRET_ACCESS_KEY=...
-```
+> **Note**: Cloudflare 5.16 had two production-breaking bugs ([d1 `read_replication` null](https://github.com/cloudflare/terraform-provider-cloudflare/issues/6309), [`workers_custom_domain` destroy/create drift](https://github.com/cloudflare/terraform-provider-cloudflare/issues/5618)). Stay on ≥ 5.19.
 
 ## Cost Estimate
 
-Run `make cost-estimate` to get current infrastructure costs.
+Run `make cost-estimate` to refresh `cost-estimate-prod.json`. Snapshot ranges (excluding traffic):
 
-| Resource | Monthly Cost |
-|----------|--------------|
-| AWS Backend EC2 (ASG) | ~$15-30/mo |
-| Hetzner Backend (hel1) | ~$5-10/mo |
-| Hetzner Backend (sin1) | ~$5-10/mo |
-| Cloudflare Containers | ~$10-15/mo |
-| Cloudflare R2 (3 regions) | ~$2-5/mo |
-| **Total** | **~$37-70/mo** |
+| Resource | Monthly |
+|---|---|
+| AWS Backend ASG (compute-alb) | ~$30–60 |
+| AWS Renderer ASG (compute-nlb) | ~$15–30 |
+| AWS Postgres (primary + replica + EBS) | ~$40–80 |
+| AWS Valkey | ~$10–20 |
+| AWS ALB + NLB + data | ~$25–45 |
+| Cloudflare Containers (client) | ~$10–15 |
+| Cloudflare R2 (storage + ops) | ~$2–10 |
+| Cloudflare Workers (cdn ×3 + status) | included on Workers plan |
+| Hetzner admin (hel1) + replicas (hel1, sin1) | ~$30–50 |
+| **Total (rough)** | **~$165–310/mo** |
 
-**Additional:** Neon DB (~$0-19/mo)
+## Operational Runbooks
 
-## Migration from Amplify/EC2
+See [`docs/README.md`](docs/README.md) for the full index. On-call should know these cold:
 
-1. Build and push container images to GHCR
-2. Deploy with `enable_cloudflare_containers = true`
-3. Test containers (run parallel to existing infra)
-4. Update DNS to point to containers
-5. Decommission Amplify apps and renderer EC2
+- **[Disaster Recovery](docs/disaster-recovery.md)** — RTO/RPO, node/primary/region/data-loss scenarios with step-by-step recovery + issues
+- **[Autoscaling](docs/autoscaling.md)** — ASG behavior, manual scale, instance refresh, userdata sync, common alarms
+- **[DB Replication (Ops)](docs/db-replication.md)** — monitor lag, restart, re-attach after failover, weekly health check
+- **[DB Backup](docs/db-backup.md)** — pgbackrest + barman schedule, verify, manual backup, PITR restore, cipher rotation
+- [Troubleshooting](docs/troubleshooting.md) — common ops issues
 
-## Documentation
+Reference / setup guides:
 
-- `terraform.tfvars.example` - Variable examples
-- `.envrc.example` - Environment variables template
-
-## Support
-
-Check provider directories (`providers/aws/*/`, `providers/cloudflare/*/`) for component-specific documentation.
+- [Deployment](docs/deploy.md) — bootstrap, plan/apply, rollback
+- [Backend & Renderer Deploy](docs/backend-deploy.md) — image rollout via GitHub Actions
+- [Database Operations](docs/database-operations.md) — EBS mount, replica promotion, barman/pgbackrest restore (referenced from DR / backup playbooks)
+- [Database Replica Setup](docs/database-replica-setup.md) — first-time streaming replication setup
+- [Database Tunnel & VPN](docs/database-tunnel-vpn.md) — connect remotely via cloudflared
+- [CDN & R2 Storage](docs/cdn-storage.md) — buckets, regions, S3 API
+- [CDN Worker](docs/cdn-worker.md) — worker code, R2 binding, custom domains
+- [DNS & Routing](docs/dns.md) — geo-routing, WAF, rate limits, tunnels
+- [Client Dashboard](docs/client.md) — container deploy, image updates, env vars
+- [Performance Observe & Tune](docs/performance-observe-tune.md) — backend / PG / valkey tuning
+- [Savings Plans Setup](docs/savings-plan-setup.md) — AWS Savings Plans
 
 ## Backend Auto-Deploy
 
-Backend deploys use GitHub Actions workflows to push release-tagged images to running EC2 and Hetzner instances.
+Releases trigger `build-and-push-image.yml` (paymentform-backend) → `deploy-release.yml` runs in sequence:
 
-### Workflows
+- **AWS** instances: SSM `SendCommand` runs the deploy script on tagged ASG nodes
+- **Hetzner** instances: SSH-in and run the deploy script
 
-| Workflow | File | Trigger |
-|----------|------|---------|
-| Build | `build-and-push-image.yml` | Push to main, PR, release, workflow_dispatch |
-| Deploy | `deploy-release.yml` | After build-and-push-image succeeds, manual dispatch |
+The deploy script detects environment (Docker vs systemd), pulls image, restarts, health-checks, and rolls back on failure.
 
-### How It Works
+Required GitHub secrets:
 
-1. Release published → `build-and-push-image` builds → `deploy-release` deploys to instances (automatic chain)
-2. Manual deploy → Run workflow dispatch with image tag
-3. AWS: Uses SSM SendCommand to run deploy script on EC2 instances
-4. Hetzner: SSH into each server and run deploy script
-5. Deploy script:
-   - Detects environment (EC2 vs Hetzner)
-   - Pulls new image
-   - Restarts container (Docker or systemd)
-   - Health check with rollback on failure
+| Secret | Purpose |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | OIDC role assumed by the workflow |
+| `GHCR_TOKEN` | `read:packages` PAT for image pull |
+| `HETZNER_BACKEND_IPS` | Space-separated Hetzner IPs (active backends) |
+| `HETZNER_SSH_KEY` | Private key authorized on those instances |
 
-### Required GitHub Secrets
-
-| Secret | Value |
-|--------|-------|
-| `AWS_DEPLOY_ROLE_ARN` | IAM role ARN for OIDC auth |
-| `GHCR_TOKEN` | GitHub token with `read:packages` scope for GHCR pull |
-| `HETZNER_BACKEND_IPS` | Space-separated list of Hetzner backend IPs |
-| `HETZNER_SSH_KEY` | Private SSH key for Hetzner root access |
-
-### AWS IAM Setup
-
-#### 1. Create OIDC Identity Provider
+Manual run:
 
 ```bash
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --thumbprint-list 6938fd4e98bab03faadb97b34396831e3780aea1 \
-  --client-id-list sts.amazonaws.com
-```
-
-#### 2. Create IAM Role for GitHub Actions
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-        },
-        "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:bit-apps-pro/paymentform-backend:ref:refs/tags/*"
-        }
-      }
-    }
-  ]
-}
-```
-
-#### 3. Attach Required Policies
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:DescribeInstances",
-        "ssm:SendCommand",
-        "ssm:GetCommandInvocation"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-### Hetzner Setup
-
-1. Add SSH public key to each Hetzner server:
-   ```bash
-   ssh-copy-id -i deploy_key.pub root@SERVER_IP
-   ```
-
-2. Store private key in GitHub secret `HETZNER_SSH_KEY`
-
-3. Tag backend instances with `Service=backend` for AWS discovery
-
-### Manual Deploy
-
-```bash
-# GitHub CLI
 gh workflow run deploy-release.yml -f image_tag=v1.2.3
 ```
 
-Or use GitHub web UI: Actions → Deploy Release → Run workflow
-
-### Rollback
-
-If deploy fails, manually run previous version:
+Rollback on-host:
 
 ```bash
-# On affected server
-curl -fsSL https://raw.githubusercontent.com/bit-apps-pro/paymentform-backend/main/.github/scripts/deploy.sh | bash -s 'PREVIOUS_TAG' backend
+curl -fsSL https://raw.githubusercontent.com/bit-apps-pro/paymentform-backend/main/.github/scripts/deploy.sh \
+  | bash -s 'PREVIOUS_TAG' backend
 ```
+
+## Conventions
+
+- Resources tagged with `local.standard_tags` (env, app, owner). Add new tags there, not per-module.
+- Module names in `environments/prod/main.tf` are stable — renaming breaks state. Use `tofu state mv` if unavoidable.
+- Secrets never go in `.tf` or `.tfvars.example`; put them in `terraform.tfvars` (gitignored) or SSM.
+- `tofu apply -target=...` and `-replace=...` are for recovery only, never routine.
+
+## Support
+
+Per-module specifics live in each provider directory. For incidents, start at [`docs/troubleshooting.md`](docs/troubleshooting.md).

@@ -234,6 +234,59 @@ module "paymentform_cache" {
   standard_tags = local.standard_tags
 }
 
+# =============================================================================
+# SQS — Laravel queues (default, webhooks, exports, tenant-provisioning)
+# =============================================================================
+# Logical queue names match Laravel's `--queue=` worker flags and code-level
+# `->onQueue('...')` dispatches. AWS-side names are prefixed so multiple
+# environments can share an AWS account without collisions. The Laravel SQS
+# driver joins SQS_PREFIX (account URL) + queue name; SQS_SUFFIX is used as the
+# resource-prefix bridge so application code keeps using the unprefixed names.
+module "paymentform_sqs" {
+  source = "../../providers/aws/sqs"
+
+  environment = "prod"
+  # Laravel SQS driver appends `SQS_SUFFIX` to every dispatched queue name to
+  # build the URL — AWS resources MUST be named to match. Suffix (not prefix)
+  # is the only Laravel-supported namespacing knob.
+  name_suffix   = "-${local.resource_prefix}"
+  queues        = ["default", "webhooks", "exports", "tenant-provisioning"]
+  standard_tags = local.standard_tags
+}
+
+# IAM policy granting backend EC2 instances permission to publish/consume
+# their own SQS queues. Scoped to the queue ARNs created above — no wildcard.
+resource "aws_iam_policy" "backend_sqs_access" {
+  name        = "${local.resource_prefix}-backend-sqs-access"
+  description = "Allow backend EC2 instances to use the Laravel SQS queues."
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:SendMessageBatch",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:DeleteMessageBatch",
+          "sqs:ChangeMessageVisibility",
+          "sqs:ChangeMessageVisibilityBatch",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+        ]
+        Resource = module.paymentform_sqs.all_arns
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "backend_sqs_access" {
+  role       = module.paymentform_backend.instance_role_name
+  policy_arn = aws_iam_policy.backend_sqs_access.arn
+}
+
 module "paymentform_backend" {
   source = "../../providers/aws/compute-alb"
 
@@ -291,8 +344,10 @@ module "paymentform_backend" {
 
     BCRYPT_ROUNDS = 12
 
-    LOG_CHANNEL              = "stack"
-    LOG_STACK                = "single"
+    # Ship every log line to the Cloudflare status worker (D1). No local file
+    # output: EC2 ASG instances are ephemeral and storage_path('logs/') is not
+    # collected. STATUS_LOG_* below tunes sampling/retention.
+    LOG_CHANNEL              = "status_worker"
     LOG_DEPRECATIONS_CHANNEL = null
     LOG_LEVEL                = "error"
 
@@ -317,8 +372,20 @@ module "paymentform_backend" {
 
     BROADCAST_CONNECTION = "reverb"
     FILESYSTEM_DISK      = "local"
-    QUEUE_CONNECTION     = "redis"
+    QUEUE_CONNECTION     = "sqs"
     CACHE_STORE          = "redis"
+
+    # SQS via EC2 instance role — SQS_KEY/SQS_SECRET intentionally unset.
+    # AppServiceProvider::boot() pins `queue.connections.sqs.credentials` to
+    # an explicit InstanceProfileProvider in that case so the SqsClient skips
+    # the AWS SDK's default chain (which would otherwise read
+    # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env first — those hold
+    # Cloudflare R2 credentials and SQS would 403). The IAM policy attached
+    # to the backend instance role grants Send/Receive/Delete on these
+    # queues; see aws_iam_policy.backend_sqs_access below.
+    SQS_PREFIX = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
+    SQS_QUEUE  = "default"
+    SQS_SUFFIX = module.paymentform_sqs.name_suffix
 
     REDIS_CLIENT   = "phpredis"
     REDIS_HOST     = module.paymentform_cache.primary_endpoint
@@ -369,7 +436,11 @@ module "paymentform_backend" {
     CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
     CORS_EXPOSED_HEADERS = "Content-Disposition"
 
-    SANCTUM_STATEFUL_DOMAINS = ".paymentform.io"
+    # Sanctum matches this via Str::is — patterns are globs, not cookie-domain
+    # syntax. Leading dot here matches NOTHING (e.g. ".paymentform.io/*" does
+    # not match "app.paymentform.io/"). Must be an explicit host list. The
+    # leading-dot cookie-scope semantics belong on SESSION_DOMAIN only.
+    SANCTUM_STATEFUL_DOMAINS = "paymentform.io,app.paymentform.io,api.paymentform.io"
 
     GOOGLE_CLIENT_ID     = var.google_client_id
     GOOGLE_CLIENT_SECRET = var.google_client_secret
@@ -384,8 +455,6 @@ module "paymentform_backend" {
     KV_STORE_API_URL      = module.paymentform_kv_store.kv_store_endpoint
     KV_STORE_API_TOKEN    = var.kv_store_api_token
     KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
-
-    OCTANE_HTTPS = "true"
 
     OTEL_SDK_DISABLED           = "true"
     OTEL_SERVICE_NAME           = "PaymentForm"
@@ -713,8 +782,7 @@ module "hetzner_admin_hel1" {
     APP_KEY   = var.app_key
     APP_DEBUG = "false"
 
-    LOG_CHANNEL              = "stack"
-    LOG_STACK                = "single"
+    LOG_CHANNEL              = "status_worker"
     LOG_DEPRECATIONS_CHANNEL = ""
     LOG_LEVEL                = "error"
 
@@ -831,8 +899,7 @@ module "hetzner_backend_hel1" {
 
     BCRYPT_ROUNDS = "12"
 
-    LOG_CHANNEL              = "stack"
-    LOG_STACK                = "single"
+    LOG_CHANNEL              = "status_worker"
     LOG_DEPRECATIONS_CHANNEL = ""
     LOG_LEVEL                = "error"
 
@@ -857,8 +924,11 @@ module "hetzner_backend_hel1" {
 
     BROADCAST_CONNECTION = "reverb"
     FILESYSTEM_DISK      = "local"
-    QUEUE_CONNECTION     = "sqs"
-    CACHE_STORE          = "redis"
+    # Hetzner has no AWS instance-role path to SQS. Keep redis until either
+    # a dedicated IAM user is provisioned (SQS_KEY/SQS_SECRET) or Hetzner
+    # routes queues to a non-AWS broker.
+    QUEUE_CONNECTION = "redis"
+    CACHE_STORE      = "redis"
 
     REDIS_CLIENT   = "phpredis"
     REDIS_HOST     = "10.1.0.10"
@@ -896,7 +966,11 @@ module "hetzner_backend_hel1" {
     CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
     CORS_EXPOSED_HEADERS = "Content-Disposition"
 
-    SANCTUM_STATEFUL_DOMAINS = ".paymentform.io"
+    # Sanctum matches this via Str::is — patterns are globs, not cookie-domain
+    # syntax. Leading dot here matches NOTHING (e.g. ".paymentform.io/*" does
+    # not match "app.paymentform.io/"). Must be an explicit host list. The
+    # leading-dot cookie-scope semantics belong on SESSION_DOMAIN only.
+    SANCTUM_STATEFUL_DOMAINS = "paymentform.io,app.paymentform.io,api.paymentform.io"
 
     GOOGLE_CLIENT_ID     = var.google_client_id
     GOOGLE_CLIENT_SECRET = var.google_client_secret
@@ -925,10 +999,7 @@ module "hetzner_backend_hel1" {
     REVERB_APP_PING_INTERVAL    = "60"
     REVERB_APP_ACTIVITY_TIMEOUT = "120"
 
-    SQS_QUEUE_CONNECTION = "sqs"
-    SQS_PREFIX           = "paymentform"
-    SQS_SUFFIX           = ""
-    OCTANE_HTTPS         = "true"
+
   }
   caddy_env_vars = {
     ACME_EMAIL                       = "hello@paymentform.io"
@@ -1022,8 +1093,7 @@ module "hetzner_backend_sin1" {
 
     BCRYPT_ROUNDS = "12"
 
-    LOG_CHANNEL              = "stack"
-    LOG_STACK                = "single"
+    LOG_CHANNEL              = "status_worker"
     LOG_DEPRECATIONS_CHANNEL = ""
     LOG_LEVEL                = "error"
 
@@ -1048,8 +1118,11 @@ module "hetzner_backend_sin1" {
 
     BROADCAST_CONNECTION = "reverb"
     FILESYSTEM_DISK      = "local"
-    QUEUE_CONNECTION     = "sqs"
-    CACHE_STORE          = "redis"
+    # Hetzner has no AWS instance-role path to SQS. Keep redis until either
+    # a dedicated IAM user is provisioned (SQS_KEY/SQS_SECRET) or Hetzner
+    # routes queues to a non-AWS broker.
+    QUEUE_CONNECTION = "redis"
+    CACHE_STORE      = "redis"
 
     REDIS_CLIENT   = "phpredis"
     REDIS_HOST     = "10.1.0.10"
@@ -1087,7 +1160,11 @@ module "hetzner_backend_sin1" {
     CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
     CORS_EXPOSED_HEADERS = "Content-Disposition"
 
-    SANCTUM_STATEFUL_DOMAINS = ".paymentform.io"
+    # Sanctum matches this via Str::is — patterns are globs, not cookie-domain
+    # syntax. Leading dot here matches NOTHING (e.g. ".paymentform.io/*" does
+    # not match "app.paymentform.io/"). Must be an explicit host list. The
+    # leading-dot cookie-scope semantics belong on SESSION_DOMAIN only.
+    SANCTUM_STATEFUL_DOMAINS = "paymentform.io,app.paymentform.io,api.paymentform.io"
 
     GOOGLE_CLIENT_ID     = var.google_client_id
     GOOGLE_CLIENT_SECRET = var.google_client_secret
@@ -1116,10 +1193,7 @@ module "hetzner_backend_sin1" {
     REVERB_APP_PING_INTERVAL    = "60"
     REVERB_APP_ACTIVITY_TIMEOUT = "120"
 
-    SQS_QUEUE_CONNECTION = "sqs"
-    SQS_PREFIX           = "paymentform"
-    SQS_SUFFIX           = ""
-    OCTANE_HTTPS         = "true"
+
   }
   caddy_env_vars = {
     ACME_EMAIL                       = "hello@paymentform.io"
