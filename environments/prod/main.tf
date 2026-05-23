@@ -620,7 +620,7 @@ module "paymentform_storage_cdn" {
 # =============================================================================
 # Bucket + native R2 public custom domain that fronts the Next.js renderer's
 # `_next/static/<buildId>/...` and `public/...` paths at
-# cdn-assets.paymentform.io. CI uploads on every push; HTML stays on origin
+# static.paymentform.io. CI uploads on every push; HTML stays on origin
 # so canonical-domain routing inside the renderer process is unaffected.
 # See `iaac/providers/cloudflare/r2/renderer-static/README.md`.
 module "paymentform_renderer_static_cdn" {

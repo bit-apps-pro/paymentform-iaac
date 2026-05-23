@@ -25,7 +25,7 @@ variable "bucket_name" {
 }
 
 variable "custom_domain" {
-  description = "Public hostname bound to the bucket (e.g. cdn-assets.paymentform.io)."
+  description = "Public hostname bound to the bucket (e.g. static.paymentform.io)."
   type        = string
 }
 

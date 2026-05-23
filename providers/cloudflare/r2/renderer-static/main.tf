@@ -14,7 +14,7 @@ provider "cloudflare" {
 }
 
 # ---------------------------------------------------------------------------
-# R2 bucket that backs cdn-assets.paymentform.io.
+# R2 bucket that backs static.paymentform.io.
 #
 # We diverge from the `cdn-worker` pattern used for tenant-uploaded assets
 # (`cdn-ap.paymentform.io`) and bind the bucket to its custom domain natively.
@@ -80,7 +80,7 @@ resource "cloudflare_r2_bucket_lifecycle" "renderer_static" {
 
 # ---------------------------------------------------------------------------
 # CORS — tenant canonical hosts (e.g. pay.merchant.com) load HTML from their
-# own origin and JS/CSS/font assets from cdn-assets.paymentform.io. Browsers
+# own origin and JS/CSS/font assets from static.paymentform.io. Browsers
 # treat that as cross-origin, so we explicitly allow GET/HEAD from any origin
 # and expose the conditional-revalidation headers.
 #
