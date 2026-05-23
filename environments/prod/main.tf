@@ -615,6 +615,28 @@ module "paymentform_storage_cdn" {
   regional_domains = { us = "cdn-us.paymentform.io", ap = "cdn-ap.paymentform.io" }
 }
 
+# =============================================================================
+# Renderer static-asset CDN
+# =============================================================================
+# Bucket + native R2 public custom domain that fronts the Next.js renderer's
+# `_next/static/<buildId>/...` and `public/...` paths at
+# cdn-assets.paymentform.io. CI uploads on every push; HTML stays on origin
+# so canonical-domain routing inside the renderer process is unaffected.
+# See `iaac/providers/cloudflare/r2/renderer-static/README.md`.
+module "paymentform_renderer_static_cdn" {
+  source = "../../providers/cloudflare/r2/renderer-static"
+
+  environment           = "prod"
+  cloudflare_account_id = var.cloudflare_account_id
+  cloudflare_api_token  = var.cloudflare_api_token
+  cloudflare_zone_id    = var.cloudflare_zone_id
+
+  bucket_name           = "paymentform-renderer-static"
+  custom_domain         = var.renderer_static_cdn_domain
+  cors_origins          = var.renderer_static_cors_origins
+  static_retention_days = 30
+}
+
 module "paymentform_kv_store" {
   source = "../../providers/cloudflare/kv"
 

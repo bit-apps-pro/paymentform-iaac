@@ -196,6 +196,19 @@ admin_cidr_blocks = [
 ]
 
 # ----------------------------------------------------------------------------
+# Renderer static-asset CDN (cdn-assets.paymentform.io)
+# ----------------------------------------------------------------------------
+# Backs the Next.js renderer's _next/static/* and public/* paths. Inlined into
+# the renderer image at build time via the CI workflow's NEXT_PUBLIC_CDN_URL
+# env. Changing the hostname requires rebuilding + redeploying the image.
+renderer_static_cdn_domain   = "cdn-assets.paymentform.io"
+
+# Tenant canonical hostnames are unknown at apply time and the static assets
+# are public, so the simplest correct value is "*". Tighten to an explicit
+# allowlist only if a future change introduces credentialed loads.
+renderer_static_cors_origins = ["*"]
+
+# ----------------------------------------------------------------------------
 # Notes
 # ----------------------------------------------------------------------------
 # Sensitive variables in this file are for reference only.

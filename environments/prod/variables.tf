@@ -386,3 +386,18 @@ variable "status_admin_allowed_ips" {
   type        = string
   default     = ""
 }
+
+# ----------------------------------------------------------------------------
+# Renderer static-asset CDN (cdn-assets.paymentform.io)
+# ----------------------------------------------------------------------------
+variable "renderer_static_cdn_domain" {
+  description = "Public hostname for the renderer static-asset CDN. Inlined into the renderer build as NEXT_PUBLIC_CDN_URL, so changing it after rollout requires rebuilding the image."
+  type        = string
+  default     = "cdn-assets.paymentform.io"
+}
+
+variable "renderer_static_cors_origins" {
+  description = "Allowed Origin values for CORS GET/HEAD on the renderer static bucket. Defaults to `[*]` because tenant canonical hostnames are unknown at apply time and the assets are public."
+  type        = list(string)
+  default     = ["*"]
+}
