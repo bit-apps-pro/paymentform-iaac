@@ -223,3 +223,71 @@ variable "deploy_script_content" {
   type        = string
   default     = ""
 }
+
+# -----------------------------------------------------------------------------
+# Worker + Sockudo (Pusher-protocol WS server) — backend service_type only.
+# Renderer instances leave sockudo_enabled = false (default) and ignore worker
+# image / valkey / reverb inputs.
+# -----------------------------------------------------------------------------
+variable "worker_container_image" {
+  description = "Container image for the RoadRunner queue worker. Only used when service_type == 'backend'."
+  type        = string
+  default     = ""
+}
+
+variable "sockudo_image" {
+  description = "Container image for the Sockudo Pusher-protocol WS server. Default uses the upstream :latest tag."
+  type        = string
+  default     = "ghcr.io/rustnsparks/sockudo:latest"
+}
+
+variable "sockudo_enabled" {
+  description = "Whether to run sockudo alongside backend + worker. Set false for service_type=renderer."
+  type        = bool
+  default     = false
+}
+
+variable "valkey_host" {
+  description = "Valkey/Redis host used by Sockudo for its cross-node adapter."
+  type        = string
+  default     = ""
+}
+
+variable "valkey_port" {
+  description = "Valkey/Redis port."
+  type        = number
+  default     = 6379
+}
+
+variable "valkey_password" {
+  description = "Valkey/Redis password for the Sockudo adapter connection."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "reverb_app_id" {
+  description = "Pusher-protocol app id consumed by both backend (REVERB_APP_ID) and Sockudo's app_manager."
+  type        = string
+  default     = ""
+}
+
+variable "reverb_app_key" {
+  description = "Pusher-protocol app key."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "reverb_app_secret" {
+  description = "Pusher-protocol app secret."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "sockudo_allowed_origins" {
+  description = "Allowed Origin headers for the Sockudo app. Echo connects from app.* so the app subdomain must appear here."
+  type        = list(string)
+  default     = ["*"]
+}

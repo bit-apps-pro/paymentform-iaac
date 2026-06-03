@@ -341,6 +341,18 @@ module "paymentform_backend" {
   ]
   deploy_script_content = file("${path.module}/../../../backend/.github/scripts/deploy-ec2.sh")
 
+  # Sockudo + worker sidecars. Sockudo binds 127.0.0.1:6001 on host network so
+  # the backend Caddy `/ws/*` handler reaches it via loopback. Cross-instance
+  # fanout uses the same Valkey already wired as REDIS_HOST for the app.
+  worker_container_image  = var.worker_container_image
+  sockudo_enabled         = true
+  valkey_host             = module.paymentform_cache.primary_endpoint
+  valkey_password         = var.redis_password
+  reverb_app_id           = var.reverb_app_id
+  reverb_app_key          = var.reverb_app_key
+  reverb_app_secret       = var.reverb_app_secret
+  sockudo_allowed_origins = ["https://app.paymentform.io"]
+
   container_env_vars = merge({
     APP_NAME          = "Payment Form"
     APP_ENV           = "production"
@@ -405,11 +417,15 @@ module "paymentform_backend" {
     REDIS_PORT     = "6379"
     REDIS_PASSWORD = var.redis_password
 
-    REVERB_APP_ID          = "1e1593236fab"
+    # Backend now broadcasts to the in-host Sockudo sidecar (127.0.0.1:6001)
+    # over loopback. Reverb supervisord entry is being retired in a separate
+    # cutover commit; keeping REVERB_* env names because the Laravel reverb
+    # broadcaster reads them as its Pusher-protocol connection config.
+    REVERB_APP_ID          = var.reverb_app_id
     REVERB_APP_KEY         = var.reverb_app_key
     REVERB_APP_SECRET      = var.reverb_app_secret
-    REVERB_HOST            = "0.0.0.0"
-    REVERB_PORT            = "8080"
+    REVERB_HOST            = "localhost"
+    REVERB_PORT            = "6001"
     REVERB_SCHEME          = "http"
     REVERB_SCALING_ENABLED = "false"
     # activity_timeout 30s (default) is too aggressive — connections silently drop after the

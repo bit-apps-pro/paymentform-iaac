@@ -55,6 +55,12 @@ variable "backend_container_image" {
   default = "ghcr.io/bit-apps-pro/paymentform-backend:latest"
 }
 
+variable "worker_container_image" {
+  description = "GHCR image for the RoadRunner queue worker container that runs alongside backend on each EC2 instance."
+  type        = string
+  default     = "ghcr.io/bit-apps-pro/paymentform-worker:latest"
+}
+
 variable "renderer_container_image" {
   type    = string
   default = "ghcr.io/bit-apps-pro/paymentform-renderer:latest"
@@ -331,6 +337,12 @@ variable "alert_webhook_url" {
   type        = string
   sensitive   = true
   default     = ""
+}
+
+variable "reverb_app_id" {
+  description = "Pusher-protocol app id shared by Laravel broadcasts (REVERB_APP_ID) and the Sockudo sidecar's app_manager."
+  type        = string
+  default     = "1e1593236fab"
 }
 
 variable "reverb_app_key" {

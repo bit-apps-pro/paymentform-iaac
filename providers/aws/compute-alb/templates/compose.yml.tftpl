@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  backend:
+    image: ${backend_image}
+    container_name: paymentform-backend
+    network_mode: host
+    restart: unless-stopped
+    env_file: [/etc/app.env]
+    environment:
+      CADDY_ENV_FILE: /etc/caddy.env
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  worker:
+    image: ${worker_image}
+    container_name: paymentform-worker
+    network_mode: host
+    restart: unless-stopped
+    env_file: [/etc/app.env]
+    environment:
+      BACKEND_COLOCATED: "1"
+    depends_on:
+      backend:
+        condition: service_started
+%{ if sockudo_enabled ~}
+
+  sockudo:
+    image: ${sockudo_image}
+    container_name: paymentform-sockudo
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      HOST: "127.0.0.1"
+      PORT: "6001"
+      CONFIG_FILE: /app/config/config.json
+    volumes:
+      - /etc/sockudo/config.json:/app/config/config.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:6001/up/${sockudo_app_id}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+%{ endif ~}

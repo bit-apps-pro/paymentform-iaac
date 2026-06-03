@@ -15,17 +15,44 @@ locals {
   # Use instance_prefix when set (multi-instance deployments), else fall back to environment
   prefix = var.instance_prefix != "" ? var.instance_prefix : var.environment
 
+  # Sockudo only joins the compose when the caller is a backend instance AND
+  # explicitly opts in. Renderer instances keep the default (false) so the
+  # template emits a 2-service compose (backend + worker).
+  sockudo_enabled = var.service_type == "backend" && var.sockudo_enabled
+
+  compose_yml_content = templatefile("${path.module}/templates/compose.yml.tftpl", {
+    backend_image   = var.container_image
+    worker_image    = var.worker_container_image
+    sockudo_image   = var.sockudo_image
+    sockudo_enabled = local.sockudo_enabled
+    sockudo_app_id  = var.reverb_app_id
+  })
+
+  # Sockudo config is only rendered (and written by userdata) when the sidecar
+  # is enabled. Empty string sentinel lets the userdata heredoc no-op.
+  sockudo_config_content = local.sockudo_enabled ? templatefile("${path.module}/templates/sockudo.config.json.tftpl", {
+    valkey_host     = var.valkey_host
+    valkey_port     = var.valkey_port
+    valkey_password = var.valkey_password
+    app_id          = var.reverb_app_id
+    app_key         = var.reverb_app_key
+    app_secret      = var.reverb_app_secret
+    allowed_origins = var.sockudo_allowed_origins
+  }) : ""
+
   rendered_userdata = templatefile("${path.module}/userdata.sh", {
-    environment           = var.environment
-    ghcr_username         = var.ghcr_username
-    region                = var.region
-    service_type          = var.service_type
-    container_env_vars    = join("\n", [for k, v in var.container_env_vars : "${k}=${v}" if v != null])
-    caddy_env_vars        = join("\n", [for k, v in var.caddy_env_vars : "${k}=${v}" if v != null])
-    IMAGE                 = var.container_image
-    auto_ssl              = var.auto_ssl
-    tunnel_token          = var.tunnel_token
-    deploy_script_content = var.deploy_script_content
+    environment            = var.environment
+    ghcr_username          = var.ghcr_username
+    region                 = var.region
+    service_type           = var.service_type
+    container_env_vars     = join("\n", [for k, v in var.container_env_vars : "${k}=${v}" if v != null])
+    caddy_env_vars         = join("\n", [for k, v in var.caddy_env_vars : "${k}=${v}" if v != null])
+    IMAGE                  = var.container_image
+    auto_ssl               = var.auto_ssl
+    tunnel_token           = var.tunnel_token
+    deploy_script_content  = var.deploy_script_content
+    compose_yml_content    = local.compose_yml_content
+    sockudo_config_content = local.sockudo_config_content
   })
 }
 
@@ -334,12 +361,12 @@ resource "null_resource" "ssm_apply_userdata" {
         --region "$REGION" \
         --comment "Apply updated userdata after tofu apply" \
         --parameters '${jsonencode({
-          commands = [
-            "echo ${base64encode(local.rendered_userdata)} | base64 -d > /tmp/userdata-update.sh",
-            "chmod +x /tmp/userdata-update.sh",
-            "bash /tmp/userdata-update.sh"
-          ]
-        })}'
+  commands = [
+    "echo ${base64encode(local.rendered_userdata)} | base64 -d > /tmp/userdata-update.sh",
+    "chmod +x /tmp/userdata-update.sh",
+    "bash /tmp/userdata-update.sh"
+  ]
+})}'
     EOT
   }
 
