@@ -19,7 +19,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y docker.io curl
 
-%{ if os_user_public_key != "" ~}
+# OS user is created unconditionally — later steps (`chown $${os_username}:docker /opt/app`)
+# rely on it existing. SSH-key write stays gated so a missing key doesn't break the build.
 log "Creating OS user: ${os_username}"
 id "${os_username}" &>/dev/null || (useradd -m -s /bin/bash "${os_username}" && passwd -d "${os_username}")
 
@@ -29,6 +30,7 @@ for grp in docker; do
   fi
 done
 
+%{ if os_user_public_key != "" ~}
 mkdir -p /home/${os_username}/.ssh
 chmod 700 /home/${os_username}/.ssh
 cat > /home/${os_username}/.ssh/authorized_keys <<'SSHEOF'
@@ -38,6 +40,8 @@ chmod 600 /home/${os_username}/.ssh/authorized_keys
 chown -R ${os_username}:${os_username} /home/${os_username}/.ssh
 
 log "OS user ${os_username} created with SSH key"
+%{ else ~}
+log "OS user ${os_username} created (no SSH public key supplied; root-only login)"
 %{ endif ~}
 
 systemctl enable docker
@@ -57,8 +61,19 @@ log "Creating app directories"
 mkdir -p /opt/app/data/traefik /opt/app/data/admin /opt/app/data/valkey /opt/app/data/admin-postgres
 touch /opt/app/data/traefik/acme.json
 chmod 600 /opt/app/data/traefik/acme.json
+
+# Top-level + host-managed dirs go to the OS user. Container-managed data dirs
+# (postgres, valkey) must keep their in-container uid — a broad
+# `chown -R` would clobber the postgres data dir and break it with
+# `FATAL: could not open file "global/pg_filenode.map": Permission denied`
+# on every re-run of userdata.sh.
 chown ${os_username}:docker /opt/app
-chown -R ${os_username}:docker /opt/app/data
+chown -R ${os_username}:docker /opt/app/data/traefik /opt/app/data/admin
+
+# postgres:17-alpine runs as uid 70; valkey/valkey:8-alpine runs as uid 999.
+chown -R 70:70 /opt/app/data/admin-postgres
+chown -R 999:999 /opt/app/data/valkey
+
 chmod 600 /opt/app/data/traefik/acme.json
 
 log "Writing compose substitution env file (/opt/app/.env)"

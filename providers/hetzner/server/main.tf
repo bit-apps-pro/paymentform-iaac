@@ -146,12 +146,15 @@ resource "null_resource" "ssh_apply_userdata" {
         exit 0
       fi
 
-      echo "Applying updated userdata to Hetzner server $SERVER_IP via SSH"
+      echo "Applying updated userdata to Hetzner server $SERVER_IP via SSH (as root)"
 
+      # SSH as root — Hetzner ssh_key_id is injected into /root/.ssh/authorized_keys
+      # by default. The os user (${var.os_username}) is created BY the rendered
+      # userdata script, so we can't depend on it existing for the connection.
       ssh -i "$KEY" \
           -o StrictHostKeyChecking=no \
           -o UserKnownHostsFile=/dev/null \
-          "${var.os_username}@$SERVER_IP" \
+          "root@$SERVER_IP" \
           "echo ${base64encode(local.rendered_userdata)} | base64 -d > /tmp/userdata-update.sh && bash /tmp/userdata-update.sh"
     EOT
   }

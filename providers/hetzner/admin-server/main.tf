@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/http"
       version = "~> 3.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -146,4 +150,42 @@ resource "hcloud_firewall_attachment" "admin" {
   count       = var.enabled ? 1 : 0
   firewall_id = hcloud_firewall.admin[0].id
   server_ids  = [hcloud_server.admin[0].id]
+}
+
+# Re-apply userdata to the running server when its content changes. The
+# `hcloud_server.admin` lifecycle ignores `user_data` so Terraform never
+# destroys/recreates the box on drift — this null_resource is the in-place
+# update path: SSH in, write the rendered script, run it.
+resource "null_resource" "ssh_apply_userdata" {
+  count = var.enabled && var.ssh_private_key_path != "" ? 1 : 0
+
+  triggers = {
+    user_data_hash = md5(local.rendered_userdata)
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      SERVER_IP="${var.enabled ? try(hcloud_server.admin[0].ipv4_address, "") : ""}"
+      KEY="${var.ssh_private_key_path}"
+
+      if [ ! -f "$KEY" ]; then
+        echo "SSH private key not found: $KEY; skipping Hetzner userdata update"
+        exit 0
+      fi
+
+      echo "Applying updated userdata to Hetzner admin $SERVER_IP via SSH (as root)"
+
+      # SSH as root — Hetzner ssh_key_id is injected into /root/.ssh/authorized_keys
+      # by default. The os user (${var.os_username}) is created BY the rendered
+      # userdata script, so we can't depend on it existing for the connection.
+      ssh -i "$KEY" \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          "root@$SERVER_IP" \
+          "echo ${base64encode(local.rendered_userdata)} | base64 -d > /tmp/userdata-update.sh && bash /tmp/userdata-update.sh"
+    EOT
+  }
+
+  depends_on = [hcloud_server.admin]
 }

@@ -556,7 +556,7 @@ module "paymentform_renderer" {
     KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
     KV_STORE_API_TOKEN    = var.kv_store_api_token
     STRIPE_KEY            = var.stripe_public_key
-    RESERVED_SUBDOMAINS   = "www,admin,api,app,dev,test"
+    RESERVED_SUBDOMAINS   = "www, api, admin, app, mail, ftp, smtp, imap, pop,dns, cdn, static, assets, blog, docs, help, support,status, test, staging, dev, development, develop, developer,localhost, email, webmail, calendar, files, git, svn, chat,wiki, forum, shop, store, auth, metrics, monitoring"
     NODE_ENV              = "production"
   }
 
@@ -775,23 +775,24 @@ module "hetzner_network_ap" {
 module "hetzner_admin_hel1" {
   source = "../../providers/hetzner/admin-server"
 
-  enabled            = true
-  environment        = "prod"
-  resource_prefix    = "paymentform-p-eu-admin"
-  region             = "eu-hel1"
-  location           = "hel1"
-  server_type        = "ccx13"
-  server_image       = "ubuntu-24.04"
-  ssh_key_id         = local.hetzner_ssh_key_id
-  os_user_public_key = var.hetzner_ssh_public_key
-  os_username        = "paymentform"
-  admin_cidr_blocks  = var.admin_cidr_blocks
-  ghcr_username      = var.ghcr_username
-  ghcr_token         = var.ghcr_token
-  network_id         = tostring(module.hetzner_network_eu.network_id)
+  enabled              = true
+  environment          = "prod"
+  resource_prefix      = "paymentform-p-eu-admin"
+  region               = "eu-hel1"
+  location             = "hel1"
+  server_type          = "ccx13"
+  server_image         = "ubuntu-24.04"
+  ssh_key_id           = local.hetzner_ssh_key_id
+  os_user_public_key   = var.hetzner_ssh_public_key
+  os_username          = "paymentform"
+  ssh_private_key_path = var.hetzner_ssh_private_key_path
+  admin_cidr_blocks    = var.admin_cidr_blocks
+  ghcr_username        = var.ghcr_username
+  ghcr_token           = var.ghcr_token
+  network_id           = tostring(module.hetzner_network_eu.network_id)
 
   admin_image     = var.admin_container_image
-  traefik_host    = var.traefik_host
+  traefik_host    = "paymentform.io"
   acme_email      = var.acme_email
   valkey_password = var.valkey_password
 
@@ -815,7 +816,7 @@ module "hetzner_admin_hel1" {
   admin_container_env_vars = {
     APP_NAME  = "Payment Form Admin"
     APP_ENV   = "production"
-    APP_URL   = "https://admin.${var.traefik_host}"
+    APP_URL   = "https://admin.paymentform.io"
     APP_KEY   = var.app_key
     APP_DEBUG = "false"
 
@@ -836,17 +837,17 @@ module "hetzner_admin_hel1" {
     # Secondary connection -> AWS primary (tenant-data reads).
     # Bound in admin/config/database.php as `connections.primary`. Uses the
     # restricted paymentform_admin role created at primary bootstrap.
-    PRIMARY_DB_CONNECTION = "pgsql"
-    PRIMARY_DB_HOST       = module.postgres_database.primary_public_ip
-    PRIMARY_DB_PORT       = "5432"
-    PRIMARY_DB_DATABASE   = var.db_database
-    PRIMARY_DB_USERNAME   = "paymentform_admin"
-    PRIMARY_DB_PASSWORD   = var.admin_db_password
+    BACKEND_DB_CONNECTION = "pgsql"
+    BACKEND_DB_HOST       = module.postgres_database.primary_public_ip
+    BACKEND_DB_PORT       = "5432"
+    BACKEND_DB_DATABASE   = var.db_database
+    BACKEND_DB_USERNAME   = "paymentform_admin"
+    BACKEND_DB_PASSWORD   = var.admin_db_password
 
     SESSION_DRIVER   = "redis"
     SESSION_LIFETIME = "10080"
     SESSION_PATH     = "/"
-    SESSION_DOMAIN   = "admin.${var.traefik_host}"
+    SESSION_DOMAIN   = "admin.paymentform.io"
 
     REDIS_CLIENT   = "phpredis"
     REDIS_HOST     = "valkey"
@@ -861,9 +862,13 @@ module "hetzner_admin_hel1" {
     MAIL_FROM_ADDRESS = "hello@paymentform.io"
     MAIL_FROM_NAME    = "Payment Form"
 
-    CORS_ALLOWED_ORIGINS = "https://admin.${var.traefik_host}"
+    CORS_ALLOWED_ORIGINS = "https://admin.paymentform.io"
     CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
     CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin"
+
+    QUEUE_CONNECTION = "redis"
+    CACHE_STORE      = "redis"
+    SESSION_DRIVER   = "redis"
   }
 
   standard_tags = local.standard_tags
@@ -917,7 +922,7 @@ module "hetzner_backend_hel1" {
     KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
     KV_STORE_API_TOKEN    = var.kv_store_api_token
     STRIPE_KEY            = var.stripe_public_key
-    RESERVED_SUBDOMAINS   = "www,admin,api,app,dev,test"
+    RESERVED_SUBDOMAINS   = "www, api, admin, app, mail, ftp, smtp, imap, pop,dns, cdn, static, assets, blog, docs, help, support,status, test, staging, dev, development, develop, developer,localhost, email, webmail, calendar, files, git, svn, chat,wiki, forum, shop, store, auth, metrics, monitoring"
     NODE_ENV              = "production"
   }
   backend_container_env_vars = {
@@ -1066,6 +1071,7 @@ module "hetzner_db_hel1" {
   server_image          = "ubuntu-24.04"
   ssh_key_id            = local.hetzner_ssh_key_id
   os_user_public_key    = var.hetzner_ssh_public_key
+  ssh_private_key_path  = var.hetzner_ssh_private_key_path
   admin_cidr_blocks     = var.admin_cidr_blocks
   backend_private_cidrs = []
   volume_size_gb        = 30
@@ -1111,7 +1117,7 @@ module "hetzner_backend_sin1" {
     KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
     KV_STORE_API_TOKEN    = var.kv_store_api_token
     STRIPE_KEY            = var.stripe_public_key
-    RESERVED_SUBDOMAINS   = "www,admin,api,app,dev,test"
+    RESERVED_SUBDOMAINS   = "www, api, admin, app, mail, ftp, smtp, imap, pop,dns, cdn, static, assets, blog, docs, help, support,status, test, staging, dev, development, develop, developer,localhost, email, webmail, calendar, files, git, svn, chat,wiki, forum, shop, store, auth, metrics, monitoring"
     NODE_ENV              = "production"
   }
   backend_container_env_vars = {
@@ -1260,6 +1266,7 @@ module "hetzner_db_sin1" {
   server_image          = "ubuntu-24.04"
   ssh_key_id            = local.hetzner_ssh_key_id
   os_user_public_key    = var.hetzner_ssh_public_key
+  ssh_private_key_path  = var.hetzner_ssh_private_key_path
   admin_cidr_blocks     = var.admin_cidr_blocks
   backend_private_cidrs = []
   backend_public_ipv4   = module.hetzner_backend_sin1.ipv4_address

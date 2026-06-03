@@ -1,11 +1,12 @@
 # Backend Stress Tests (k6)
 
-Two scripts live here:
+Three scripts live here:
 
 | Script | Goal | Typical target |
 |---|---|---|
 | `session-pollution.js` | Auth-guard / tenancy state leak between concurrent requests | staging or prod |
 | `form-create-render-prod.js` | Form create + renderer fetch under load, with cross-tenant leak detector | prod |
+| `signup-burst.js` | N concurrent signups; measures signup + tenant-provisioning tail latency | local or staging |
 
 For a full end-to-end browser flow (signup → mailpit verify → tenant
 provisioning → Stripe OAuth → render), see
@@ -172,3 +173,62 @@ Outputs `create-render-summary.json` + a stdout verdict line. Thresholds:
 - `p(95)` for both create and render < 2000ms
 
 Any breach makes k6 exit non-zero.
+
+---
+
+## Signup burst (local / staging)
+
+`signup-burst.js` fires `VUS` concurrent signups in a single burst and
+measures the latency the user actually sees: signup HTTP call, then polling
+`/workspace/status` until `provisioning.state === 'ready'`. Each VU runs
+exactly one iteration so the metrics expose the burst tail (the case where
+the Nth signup waits behind an under-provisioned queue), not steady-state.
+
+### Run
+
+```sh
+# Local docker-compose stack (default 10 concurrent signups)
+k6 run iaac/loadtest/k6/signup-burst.js \
+  --env API_BASE_URL=http://localhost:8080
+
+# Larger burst (cap with POLL_TIMEOUT_MS if you expect long tails)
+k6 run iaac/loadtest/k6/signup-burst.js \
+  --env API_BASE_URL=http://localhost:8080 \
+  --env VUS=20 --env POLL_TIMEOUT_MS=300000
+
+# Staging
+k6 run iaac/loadtest/k6/signup-burst.js \
+  --env API_BASE_URL=https://api.dev.paymentform.io \
+  --env EMAIL_DOMAIN=loadtest.paymentform.io \
+  --env VUS=10
+```
+
+Outputs `signup-burst-summary.json` + a stdout verdict. Thresholds:
+
+- `signup_failures == 0`
+- `provision_timeouts == 0`
+- `provision_latency_ms p(95) < 60s`, `p(99) < 120s`
+- `e2e_latency_ms p(95) < 70s`
+- `http_req_failed < 5%`
+
+### What this catches
+
+- A global lock (e.g. a stale `Cache::lock('subdomain')`) that serializes
+  the signup HTTP path — visible as `signup_latency_ms` climbing linearly
+  with VU index.
+- An under-provisioned queue worker pool — visible as `provision_latency_ms`
+  fanning out: the first N=workers complete fast, the rest stairstep.
+- Per-job retries from transient failures — `e2e_latency_ms` clusters around
+  multiples of the job's backoff (10s, 30s, 60s).
+
+### Notes
+
+- Uses `Accept: application/json` + Sanctum CSRF flow
+  (`GET /sanctum/csrf-cookie` → `X-XSRF-TOKEN`). Cookie jar is per-VU so
+  concurrent signups don't share session state.
+- Emails are `loadtest+<unique>@<EMAIL_DOMAIN>`. Default domain
+  `example.com` resolves (the validator wants DNS) but obviously
+  doesn't accept mail — fine for write-side testing only.
+- The script does NOT clean up created tenants; truncate the central DB
+  between runs (`php artisan tenancy:clean` or similar) if you re-run a
+  lot.

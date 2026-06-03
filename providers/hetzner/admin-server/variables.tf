@@ -51,6 +51,12 @@ variable "os_user_public_key" {
   default     = ""
 }
 
+variable "ssh_private_key_path" {
+  description = "Path to SSH private key used by the null_resource to push updated userdata without server replacement. Empty string skips the SSH apply step."
+  type        = string
+  default     = ""
+}
+
 variable "admin_cidr_blocks" {
   description = "CIDR blocks allowed for SSH access (admin IPs only)"
   type        = list(string)

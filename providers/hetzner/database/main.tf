@@ -6,13 +6,25 @@ terraform {
       source  = "hetznercloud/hcloud"
       version = "~> 1.49"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
 locals {
-  server_name     = "${var.resource_prefix}-${var.region}-db-replica"
+  server_name      = "${var.resource_prefix}-${var.region}-db-replica"
   admin_source_ips = sort(distinct(length(var.admin_cidr_blocks) > 0 ? var.admin_cidr_blocks : ["0.0.0.0/0"]))
   db_source_ips    = sort(distinct(length(var.backend_private_cidrs) > 0 ? var.backend_private_cidrs : (var.backend_public_ipv4 != "" ? ["${var.backend_public_ipv4}/32"] : var.allowed_cidrs)))
+
+  rendered_userdata = templatefile("${path.module}/userdata-replica.sh", {
+    primary_host       = var.primary_host
+    primary_port       = var.primary_port
+    db_password        = var.db_password
+    os_username        = var.os_username
+    os_user_public_key = var.os_user_public_key
+  })
 }
 
 resource "hcloud_ssh_key" "db" {
@@ -42,13 +54,7 @@ resource "hcloud_server" "db_replica" {
   location    = var.location
   ssh_keys    = var.ssh_key_id != "" ? [var.ssh_key_id] : (var.ssh_public_key != "" ? [hcloud_ssh_key.db[0].id] : [])
 
-  user_data = templatefile("${path.module}/userdata-replica.sh", {
-    primary_host       = var.primary_host
-    primary_port       = var.primary_port
-    db_password        = var.db_password
-    os_username        = var.os_username
-    os_user_public_key = var.os_user_public_key
-  })
+  user_data = local.rendered_userdata
 
   labels = merge(var.standard_tags, {
     environment = var.environment
@@ -56,6 +62,10 @@ resource "hcloud_server" "db_replica" {
     service     = "database"
     role        = "replica"
   })
+
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 }
 
 resource "hcloud_volume_attachment" "data" {
@@ -99,4 +109,42 @@ resource "hcloud_firewall_attachment" "db" {
   count       = var.enabled ? 1 : 0
   firewall_id = hcloud_firewall.db.id
   server_ids  = [hcloud_server.db_replica[0].id]
+}
+
+# Re-apply userdata to the running replica when its content changes. The
+# `hcloud_server.db_replica` lifecycle ignores `user_data` so Terraform never
+# destroys/recreates the box on drift — this null_resource is the in-place
+# update path: SSH in, write the rendered script, run it.
+resource "null_resource" "ssh_apply_userdata" {
+  count = var.enabled && var.ssh_private_key_path != "" ? 1 : 0
+
+  triggers = {
+    user_data_hash = md5(local.rendered_userdata)
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      SERVER_IP="${var.enabled ? try(hcloud_server.db_replica[0].ipv4_address, "") : ""}"
+      KEY="${var.ssh_private_key_path}"
+
+      if [ ! -f "$KEY" ]; then
+        echo "SSH private key not found: $KEY; skipping Hetzner userdata update"
+        exit 0
+      fi
+
+      echo "Applying updated userdata to Hetzner db replica $SERVER_IP via SSH (as root)"
+
+      # SSH as root — Hetzner ssh_key_id is injected into /root/.ssh/authorized_keys
+      # by default. The os user (${var.os_username}) is created BY the rendered
+      # userdata script, so we can't depend on it existing for the connection.
+      ssh -i "$KEY" \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          "root@$SERVER_IP" \
+          "echo ${base64encode(local.rendered_userdata)} | base64 -d > /tmp/userdata-update.sh && bash /tmp/userdata-update.sh"
+    EOT
+  }
+
+  depends_on = [hcloud_server.db_replica]
 }
