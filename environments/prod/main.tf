@@ -905,9 +905,12 @@ module "hetzner_admin_hel1" {
     CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
     CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin"
 
-    # Admin app delegates queue work to the same SQS that EC2 backend uses;
-    # redis queue path is dead under the worker container model.
-    QUEUE_CONNECTION = "sqs"
+    # Admin app dispatches to local Valkey (low-latency, single-host). The
+    # co-located worker container OVERRIDES this to "sqs" via compose
+    # `environment:` so it consumes the same prod SQS queues as the EC2
+    # workers. Both reads of /opt/app/.env land here first; compose
+    # service-level env wins per the Docker precedence rules.
+    QUEUE_CONNECTION = "redis"
     CACHE_STORE      = "redis"
 
     # AWS creds for the worker container running on this Hetzner instance.
