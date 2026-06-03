@@ -868,7 +868,6 @@ module "hetzner_admin_hel1" {
 
     QUEUE_CONNECTION = "redis"
     CACHE_STORE      = "redis"
-    SESSION_DRIVER   = "redis"
   }
 
   standard_tags = local.standard_tags
