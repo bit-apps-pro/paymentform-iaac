@@ -878,7 +878,7 @@ module "hetzner_admin_hel1" {
     # restricted paymentform_admin role created at primary bootstrap.
     BACKEND_DB_CONNECTION = "pgsql"
     BACKEND_DB_HOST       = module.postgres_database.primary_public_ip
-    BACKEND_DB_PORT       = "5432"
+    BACKEND_DB_PORT       = "6432"
     BACKEND_DB_DATABASE   = var.db_database
     BACKEND_DB_USERNAME   = "paymentform_admin"
     BACKEND_DB_PASSWORD   = var.admin_db_password
@@ -939,6 +939,17 @@ resource "aws_security_group_rule" "postgresql_ingress_from_admin" {
   cidr_blocks       = ["${module.hetzner_admin_hel1.ipv4_address}/32"]
   security_group_id = module.paymentform_security.postgresql_security_group_id
   description       = "Allow PostgreSQL from Hetzner admin server"
+}
+
+resource "aws_security_group_rule" "pgbouncer_ingress_from_admin" {
+  count             = module.hetzner_admin_hel1.enabled ? 1 : 0
+  type              = "ingress"
+  from_port         = 6432
+  to_port           = 6432
+  protocol          = "tcp"
+  cidr_blocks       = ["${module.hetzner_admin_hel1.ipv4_address}/32"]
+  security_group_id = module.paymentform_security.postgresql_security_group_id
+  description       = "Allow pgbouncer from Hetzner admin worker"
 }
 
 # =============================================================================
