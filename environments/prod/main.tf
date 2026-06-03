@@ -300,6 +300,29 @@ resource "aws_iam_role_policy_attachment" "backend_sqs_access" {
   policy_arn = aws_iam_policy.backend_sqs_access.arn
 }
 
+# =============================================================================
+# IAM user for Hetzner worker (no instance role available on Hetzner — uses
+# a static access key injected into the admin container env). Same SQS
+# policy as the backend role so the queue ARN scope stays consistent.
+# =============================================================================
+resource "aws_iam_user" "hz_worker" {
+  name = "${local.resource_prefix}-hz-worker"
+  path = "/service/"
+  tags = local.standard_tags
+}
+
+resource "aws_iam_user_policy_attachment" "hz_worker_sqs" {
+  user       = aws_iam_user.hz_worker.name
+  policy_arn = aws_iam_policy.backend_sqs_access.arn
+}
+
+resource "aws_iam_access_key" "hz_worker" {
+  user = aws_iam_user.hz_worker.name
+  # Rotation: tainting this resource (`tofu taint`) and re-applying issues
+  # a new key pair; the old key stays active until manually deactivated so
+  # the running worker container can rotate without downtime.
+}
+
 module "paymentform_backend" {
   source = "../../providers/aws/compute-alb"
 
@@ -882,8 +905,25 @@ module "hetzner_admin_hel1" {
     CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
     CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin"
 
-    QUEUE_CONNECTION = "redis"
+    # Admin app delegates queue work to the same SQS that EC2 backend uses;
+    # redis queue path is dead under the worker container model.
+    QUEUE_CONNECTION = "sqs"
     CACHE_STORE      = "redis"
+
+    # AWS creds for the worker container running on this Hetzner instance.
+    # No IMDS on Hetzner — must use long-lived access keys. Pinned to the
+    # paymentform-prod-hz-worker IAM user that has only SQS Send/Receive/
+    # Delete on the prod queue ARNs (no other AWS perms).
+    AWS_ACCESS_KEY_ID     = aws_iam_access_key.hz_worker.id
+    AWS_SECRET_ACCESS_KEY = aws_iam_access_key.hz_worker.secret
+    AWS_DEFAULT_REGION    = local.region
+
+    # Tell Laravel's SQS driver where to publish; suffix matches the
+    # name_suffix set in module.paymentform_sqs so per-environment queues
+    # never collide.
+    SQS_PREFIX = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
+    SQS_QUEUE  = "default"
+    SQS_SUFFIX = module.paymentform_sqs.name_suffix
   }
 
   standard_tags = local.standard_tags
