@@ -77,6 +77,67 @@ variable "admin_image" {
   type        = string
 }
 
+variable "backend_image" {
+  description = "Container image for the backend app, used by the SQS-overflow queue worker co-deployed on the admin host (e.g. ghcr.io/bit-apps-pro/paymentform-backend:latest)"
+  type        = string
+}
+
+variable "backend_db_connection" {
+  description = "Laravel DB_CONNECTION for the backend SQS-overflow worker (typically 'pgsql')"
+  type        = string
+  default     = "pgsql"
+}
+
+variable "backend_db_host" {
+  description = "Backend primary DB host as reached from the admin Hetzner box (pgbouncer endpoint)"
+  type        = string
+}
+
+variable "backend_db_port" {
+  description = "Backend primary DB port (pgbouncer = 6432)"
+  type        = string
+  default     = "6432"
+}
+
+variable "backend_db_database" {
+  description = "Backend primary DB database name"
+  type        = string
+}
+
+variable "backend_db_username" {
+  description = "Backend primary DB username (Hetzner worker IAM role)"
+  type        = string
+}
+
+variable "backend_db_password" {
+  description = "Backend primary DB password for the Hetzner worker"
+  type        = string
+  sensitive   = true
+}
+
+variable "sqs_key" {
+  description = "AWS access key ID for the SQS-overflow worker (Hetzner-specific IAM user, not the EC2 instance profile)"
+  type        = string
+  sensitive   = true
+}
+
+variable "sqs_secret" {
+  description = "AWS secret access key paired with sqs_key"
+  type        = string
+  sensitive   = true
+}
+
+variable "sqs_prefix" {
+  description = "SQS queue URL prefix (https://sqs.<region>.amazonaws.com/<account-id>)"
+  type        = string
+}
+
+variable "sqs_region" {
+  description = "AWS region of the SQS queues"
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "traefik_host" {
   description = "Primary domain for Traefik routing (e.g. paymentform.io)"
   type        = string

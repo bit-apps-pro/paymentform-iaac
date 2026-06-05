@@ -55,12 +55,6 @@ variable "backend_container_image" {
   default = "ghcr.io/bit-apps-pro/paymentform-backend:latest"
 }
 
-variable "worker_container_image" {
-  description = "GHCR image for the RoadRunner queue worker container that runs alongside backend on each EC2 instance."
-  type        = string
-  default     = "ghcr.io/bit-apps-pro/paymentform-worker:latest"
-}
-
 variable "renderer_container_image" {
   type    = string
   default = "ghcr.io/bit-apps-pro/paymentform-renderer:latest"

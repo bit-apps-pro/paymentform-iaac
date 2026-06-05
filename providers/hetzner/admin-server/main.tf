@@ -50,12 +50,23 @@ locals {
   # inside .env values, so no escaping needed except for backslash/quote.
   compose_env_content = join("\n", [
     "ADMIN_IMAGE=${var.admin_image}",
+    "BACKEND_IMAGE=${var.backend_image}",
     "TRAEFIK_HOST=${var.traefik_host}",
     "ACME_EMAIL=${var.acme_email}",
     "VALKEY_PASSWORD=${var.valkey_password}",
     "LOCAL_DB_DATABASE=${var.local_db_database}",
     "LOCAL_DB_USERNAME=${var.local_db_username}",
     "LOCAL_DB_PASSWORD=${var.local_db_password}",
+    "BACKEND_DB_CONNECTION=${var.backend_db_connection}",
+    "BACKEND_DB_HOST=${var.backend_db_host}",
+    "BACKEND_DB_PORT=${var.backend_db_port}",
+    "BACKEND_DB_DATABASE=${var.backend_db_database}",
+    "BACKEND_DB_USERNAME=${var.backend_db_username}",
+    "BACKEND_DB_PASSWORD=${var.backend_db_password}",
+    "SQS_KEY=${var.sqs_key}",
+    "SQS_SECRET=${var.sqs_secret}",
+    "SQS_PREFIX=${var.sqs_prefix}",
+    "SQS_REGION=${var.sqs_region}",
   ])
 
   rendered_userdata = templatefile("${path.module}/userdata.sh", {

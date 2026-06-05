@@ -364,10 +364,9 @@ module "paymentform_backend" {
   ]
   deploy_script_content = file("${path.module}/../../../backend/.github/scripts/deploy-ec2.sh")
 
-  # Sockudo + worker sidecars. Sockudo binds 127.0.0.1:6001 on host network so
+  # Sockudo sidecar. Sockudo binds 127.0.0.1:6001 on host network so
   # the backend Caddy `/ws/*` handler reaches it via loopback. Cross-instance
   # fanout uses the same Valkey already wired as REDIS_HOST for the app.
-  worker_container_image  = var.worker_container_image
   sockudo_enabled         = true
   valkey_host             = module.paymentform_cache.primary_endpoint
   valkey_password         = var.redis_password
@@ -831,7 +830,27 @@ module "hetzner_admin_hel1" {
   network_id           = tostring(module.hetzner_network_eu.network_id)
 
   admin_image     = var.admin_container_image
+  backend_image   = var.backend_container_image
   traefik_host    = "paymentform.io"
+
+  # Backend primary DB reached from Hetzner via pgbouncer over the public
+  # AWS endpoint. SG ingress rule (pgbouncer_ingress_from_admin) opens 6432
+  # for the admin host's IPv4 only. Mirrors the BACKEND_DB_* envs already
+  # passed into the admin app container.
+  backend_db_connection = "pgsql"
+  backend_db_host       = module.postgres_database.primary_public_ip
+  backend_db_port       = "6432"
+  backend_db_database   = var.db_database
+  backend_db_username   = "paymentform_admin"
+  backend_db_password   = var.admin_db_password
+
+  # Hetzner-side SQS credentials. The EC2 backend uses the instance profile
+  # via InstanceProfileProvider; Hetzner has no IMDS so it uses the
+  # dedicated hz_worker IAM user.
+  sqs_key    = aws_iam_access_key.hz_worker.id
+  sqs_secret = aws_iam_access_key.hz_worker.secret
+  sqs_prefix = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
+  sqs_region = local.region
   acme_email      = var.acme_email
   valkey_password = var.valkey_password
 

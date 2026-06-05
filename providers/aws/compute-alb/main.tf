@@ -22,10 +22,7 @@ locals {
 
   compose_yml_content = templatefile("${path.module}/templates/compose.yml.tftpl", {
     backend_image   = var.container_image
-    worker_image    = var.worker_container_image
-    sockudo_image   = var.sockudo_image
     sockudo_enabled = local.sockudo_enabled
-    sockudo_app_id  = var.reverb_app_id
   })
 
   # Sockudo config is only rendered (and written by userdata) when the sidecar

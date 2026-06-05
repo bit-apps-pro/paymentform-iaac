@@ -225,16 +225,10 @@ variable "deploy_script_content" {
 }
 
 # -----------------------------------------------------------------------------
-# Worker + Sockudo (Pusher-protocol WS server) — backend service_type only.
-# Renderer instances leave sockudo_enabled = false (default) and ignore worker
-# image / valkey / reverb inputs.
+# Sockudo (Pusher-protocol WS server) — backend service_type only.
+# Renderer instances leave sockudo_enabled = false (default) and ignore
+# valkey / reverb inputs.
 # -----------------------------------------------------------------------------
-variable "worker_container_image" {
-  description = "Container image for the RoadRunner queue worker. Only used when service_type == 'backend'."
-  type        = string
-  default     = ""
-}
-
 variable "sockudo_image" {
   description = "Container image for the Sockudo Pusher-protocol WS server. Default uses the upstream :latest tag."
   type        = string
