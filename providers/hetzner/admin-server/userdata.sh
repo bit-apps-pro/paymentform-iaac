@@ -88,6 +88,12 @@ ${admin_env_content}
 ADMINENVEOF
 chmod 600 /opt/app/admin.env
 
+log "Writing backend-queue Laravel environment file (/opt/app/backend-queue.env)"
+cat > /opt/app/backend-queue.env <<'BACKENDQUEUEENVEOF'
+${backend_queue_env_content}
+BACKENDQUEUEENVEOF
+chmod 600 /opt/app/backend-queue.env
+
 log "Writing docker-compose.yml"
 cat > /opt/app/docker-compose.yml <<'COMPOSEEOF'
 ${compose_file_content}

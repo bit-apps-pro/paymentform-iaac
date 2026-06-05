@@ -42,12 +42,30 @@ locals {
     v == null ? "" : format(
       "%s=\"%s\"",
       k,
-      replace(replace(v, "\\", "\\\\"), "\"", "\\\"")
+      replace(replace(tostring(v), "\\", "\\\\"), "\"", "\\\"")
+    )
+  ])
+
+  # Backend-queue env file (/opt/app/backend-queue.env). admin compose's
+  # `backend-queue` service uses this as `env_file` so the full backend
+  # Laravel env (with Hetzner-specific overrides merged in upstream)
+  # lands on the host as one file instead of being mirrored per-key into
+  # docker-compose `environment:` blocks.
+  backend_queue_env_content = join("\n", [
+    for k, v in var.backend_queue_container_env_vars :
+    v == null ? "" : format(
+      "%s=\"%s\"",
+      k,
+      replace(replace(tostring(v), "\\", "\\\\"), "\"", "\\\"")
     )
   ])
 
   # docker-compose .env: literal KEY=VALUE; compose does not interpolate `$`
   # inside .env values, so no escaping needed except for backslash/quote.
+  # Carries only image refs + values needed for ${VAR} expansion inside the
+  # compose file itself (Traefik host, Valkey password for valkey-cli health,
+  # local Postgres bootstrap creds). Per-app env now flows via the dedicated
+  # admin.env / backend-queue.env files.
   compose_env_content = join("\n", [
     "ADMIN_IMAGE=${var.admin_image}",
     "BACKEND_IMAGE=${var.backend_image}",
@@ -57,16 +75,6 @@ locals {
     "LOCAL_DB_DATABASE=${var.local_db_database}",
     "LOCAL_DB_USERNAME=${var.local_db_username}",
     "LOCAL_DB_PASSWORD=${var.local_db_password}",
-    "BACKEND_DB_CONNECTION=${var.backend_db_connection}",
-    "BACKEND_DB_HOST=${var.backend_db_host}",
-    "BACKEND_DB_PORT=${var.backend_db_port}",
-    "BACKEND_DB_DATABASE=${var.backend_db_database}",
-    "BACKEND_DB_USERNAME=${var.backend_db_username}",
-    "BACKEND_DB_PASSWORD=${var.backend_db_password}",
-    "SQS_KEY=${var.sqs_key}",
-    "SQS_SECRET=${var.sqs_secret}",
-    "SQS_PREFIX=${var.sqs_prefix}",
-    "SQS_REGION=${var.sqs_region}",
   ])
 
   rendered_userdata = templatefile("${path.module}/userdata.sh", {
@@ -77,6 +85,7 @@ locals {
     deploy_script_content       = var.deploy_script_content
     compose_file_content        = var.compose_file_content
     admin_env_content           = local.admin_env_content
+    backend_queue_env_content   = local.backend_queue_env_content
     compose_env_content         = local.compose_env_content
     local_db_username           = var.local_db_username
     local_db_password           = var.local_db_password

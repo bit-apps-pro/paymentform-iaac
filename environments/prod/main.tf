@@ -57,6 +57,181 @@ locals {
   }
 
   hetzner_ssh_key_id = try(data.hcloud_ssh_key.existing[0].id, try(hcloud_ssh_key.shared[0].id, ""))
+
+  # SQS account-scoped URL prefix; consumed by EC2 backend (instance-profile
+  # auth) + Hetzner admin backend-queue overflow (hz_worker IAM key auth).
+  sqs_prefix = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
+}
+
+# Canonical backend Laravel env. Single source of truth shared by the EC2
+# backend container (full HTTP+queue+sockudo) and the Hetzner admin host's
+# backend-queue overflow container (queue-only). Defined as a second locals
+# block so it can reference modules declared after the first.
+locals {
+  backend_env = merge({
+    APP_NAME          = "Payment Form"
+    APP_ENV           = "production"
+    APP_URL           = "https://api.paymentform.io"
+    APP_BASE_DOMAIN   = "paymentform.io"
+    APP_DOMAIN        = "api.paymentform.io"
+    FRONTEND_URL      = "https://app.paymentform.io"
+    FRONTEND_DASH_URL = "https://app.paymentform.io/myforms"
+    APP_KEY           = var.app_key
+    APP_DEBUG         = "false"
+
+    APP_LOCALE          = "en"
+    APP_FALLBACK_LOCALE = "en"
+
+    BCRYPT_ROUNDS = 12
+
+    LOG_CHANNEL              = "status_worker"
+    LOG_DEPRECATIONS_CHANNEL = null
+    LOG_LEVEL                = "error"
+
+    DB_CONNECTION = "pgsql"
+    DB_HOST       = module.postgres_database.primary_endpoint
+    DB_PORT       = 6432
+    DB_DATABASE   = var.db_database
+    DB_USERNAME   = var.db_username
+    DB_PASSWORD   = var.db_password
+
+    TENANT_DB_SYNC_URL          = ""
+    TENANT_DB_API_URL           = "https://api.turso.tech"
+    TENANT_TURSO_ORG_SLUG       = var.turso_org_slug
+    TENANT_TURSO_DEFAULT_REGION = "aws-ap-northeast-1"
+    TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
+
+    SESSION_DRIVER   = "redis"
+    SESSION_LIFETIME = 10080
+    SESSION_ENCRYPT  = false
+    SESSION_PATH     = "/"
+    SESSION_DOMAIN   = ".paymentform.io"
+
+    BROADCAST_CONNECTION = "reverb"
+    FILESYSTEM_DISK      = "local"
+    QUEUE_CONNECTION     = "sqs"
+    CACHE_STORE          = "redis"
+
+    SQS_PREFIX = local.sqs_prefix
+    SQS_QUEUE  = "default"
+    SQS_SUFFIX = module.paymentform_sqs.name_suffix
+
+    REDIS_CLIENT   = "phpredis"
+    REDIS_HOST     = module.paymentform_cache.primary_endpoint
+    REDIS_PORT     = "6379"
+    REDIS_PASSWORD = var.redis_password
+
+    REVERB_APP_ID               = var.reverb_app_id
+    REVERB_APP_KEY              = var.reverb_app_key
+    REVERB_APP_SECRET           = var.reverb_app_secret
+    REVERB_HOST                 = "localhost"
+    REVERB_PORT                 = "6001"
+    REVERB_SCHEME               = "http"
+    REVERB_SCALING_ENABLED      = "false"
+    REVERB_APP_PING_INTERVAL    = "60"
+    REVERB_APP_ACTIVITY_TIMEOUT = "120"
+
+    MAIL_MAILER       = "smtp"
+    MAIL_HOST         = var.mail_host
+    MAIL_USERNAME     = var.mail_username
+    MAIL_PASSWORD     = var.mail_password
+    MAIL_PORT         = "587"
+    MAIL_FROM_ADDRESS = "hello@paymentform.io"
+    MAIL_FROM_NAME    = "Payment Form"
+
+    AWS_ACCESS_KEY_ID           = var.upload_storage_access_key_id
+    AWS_SECRET_ACCESS_KEY       = var.upload_storage_secret_access_key
+    AWS_DEFAULT_REGION          = local.region
+    AWS_BUCKET                  = "paymentform-uploads-us"
+    AWS_BUCKET_EU               = "paymentform-uploads-eu"
+    AWS_BUCKET_AP               = "paymentform-uploads-ap"
+    AWS_USE_PATH_STYLE_ENDPOINT = "true"
+    AWS_ENDPOINT                = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
+    AWS_ENDPOINT_EU             = "https://${var.cloudflare_account_id}.eu.r2.cloudflarestorage.com"
+    AWS_CLOUDFRONT_URL          = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
+    AWS_CDN_URL                 = "https://cdn-us.paymentform.io"
+    AWS_CDN_URL_EU              = "https://cdn-eu.paymentform.io"
+    AWS_CDN_URL_AP              = "https://cdn-ap.paymentform.io"
+    AWS_ACCESS_KEY_ID_EU        = var.upload_storage_access_key_id_eu
+    AWS_SECRET_ACCESS_KEY_EU    = var.upload_storage_secret_access_key_eu
+    AWS_ACCESS_KEY_ID_AP        = var.upload_storage_access_key_id_ap
+    AWS_SECRET_ACCESS_KEY_AP    = var.upload_storage_secret_access_key_ap
+
+    CORS_ALLOWED_ORIGINS = "https://app.paymentform.io"
+    CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
+    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
+    CORS_EXPOSED_HEADERS = "Content-Disposition"
+
+    SANCTUM_STATEFUL_DOMAINS = "paymentform.io,app.paymentform.io,api.paymentform.io"
+
+    GOOGLE_CLIENT_ID     = var.google_client_id
+    GOOGLE_CLIENT_SECRET = var.google_client_secret
+    GOOGLE_REDIRECT_URI  = "https://api.paymentform.io/auth/google/callback"
+
+    STRIPE_PUBLIC                 = var.stripe_public_key
+    STRIPE_SECRET                 = var.stripe_secret
+    STRIPE_CLIENT_ID              = var.stripe_client_id
+    STRIPE_REDIRECT_URI           = "https://api.paymentform.io/stripe/callback"
+    STRIPE_CONNECT_WEBHOOK_SECRET = var.stripe_connect_webhook_secret
+
+    KV_STORE_API_URL      = module.paymentform_kv_store.kv_store_endpoint
+    KV_STORE_API_TOKEN    = var.kv_store_api_token
+    KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
+
+    OTEL_SDK_DISABLED           = "true"
+    OTEL_SERVICE_NAME           = "PaymentForm"
+    OTEL_TRACES_EXPORTER        = "otlp"
+    OTEL_METRICS_EXPORTER       = "otlp"
+    OTEL_LOGS_EXPORTER          = "otlp"
+    OTEL_EXPORTER_OTLP_ENDPOINT = "http://otel-collector:4318"
+    OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+
+    ALERT_EMAIL_ENABLED     = false
+    ALERT_SLACK_ENABLED     = false
+    ALERT_SLACK_CHANNEL     = "#alerts"
+    ALERT_WEBHOOK_ENABLED   = false
+    ALERT_SLACK_WEBHOOK_URL = ""
+    ALERT_WEBHOOK_URL       = ""
+    ALERT_WEBHOOK_SECRET    = ""
+    STATUS_LOG_INGEST_URL   = "https://status.paymentform.io/api/logs/batch"
+    STATUS_LOG_INGEST_TOKEN = var.status_log_ingest_token
+    }, module.postgres_database.replica_endpoint != null ? {
+    DB_HOST_WRITE = module.postgres_database.primary_endpoint
+    DB_HOST_READ  = module.postgres_database.replica_endpoint
+  } : {})
+
+  # Hetzner admin host's backend-queue overflow container. Same backend code,
+  # different connection targets:
+  #   - DB_*: AWS primary via pgbouncer's PUBLIC endpoint (SG opens 6432 for
+  #     the admin host's IPv4 only). Restricted paymentform_admin role.
+  #   - REDIS_*: admin's local Valkey on the same Hetzner host (no
+  #     ElastiCache reach over the Atlantic).
+  #   - SQS_KEY/SECRET: dedicated hz_worker IAM key (Hetzner has no IMDS so
+  #     the EC2 InstanceProfileProvider path doesn't apply).
+  #   - BROADCAST_CONNECTION=log: no sockudo on the admin host; jobs that
+  #     fire events get logged instead of broadcast.
+  hz_backend_queue_env = merge(local.backend_env, {
+    DB_HOST     = module.postgres_database.primary_public_ip
+    DB_PORT     = "6432"
+    DB_USERNAME = "paymentform_admin"
+    DB_PASSWORD = var.admin_db_password
+
+    # backend_env injects DB_HOST_WRITE/READ as the AWS-internal endpoints
+    # when replica is enabled. Hetzner has no path to those; pin both to the
+    # public IP so connect() doesn't try to resolve unreachable hosts the
+    # moment replica is turned on.
+    DB_HOST_WRITE = module.postgres_database.primary_public_ip
+    DB_HOST_READ  = module.postgres_database.primary_public_ip
+
+    # REDIS_PORT (6379) + REDIS_CLIENT (phpredis) inherited from backend_env
+    # — match the admin host's local Valkey container exactly.
+    REDIS_HOST     = "valkey"
+    REDIS_PASSWORD = var.valkey_password
+
+    SQS_KEY              = aws_iam_access_key.hz_worker.id
+    SQS_SECRET           = aws_iam_access_key.hz_worker.secret
+    BROADCAST_CONNECTION = "log"
+  })
 }
 
 resource "aws_ssm_parameter" "ghcr_token" {
@@ -375,159 +550,7 @@ module "paymentform_backend" {
   reverb_app_secret       = var.reverb_app_secret
   sockudo_allowed_origins = ["https://app.paymentform.io"]
 
-  container_env_vars = merge({
-    APP_NAME          = "Payment Form"
-    APP_ENV           = "production"
-    APP_URL           = "https://api.paymentform.io"
-    APP_BASE_DOMAIN   = "paymentform.io"
-    APP_DOMAIN        = "api.paymentform.io"
-    FRONTEND_URL      = "https://app.paymentform.io"
-    FRONTEND_DASH_URL = "https://app.paymentform.io/myforms"
-    APP_KEY           = var.app_key
-    APP_DEBUG         = "false"
-
-    APP_LOCALE          = "en"
-    APP_FALLBACK_LOCALE = "en"
-
-    BCRYPT_ROUNDS = 12
-
-    # Ship every log line to the Cloudflare status worker (D1). No local file
-    # output: EC2 ASG instances are ephemeral and storage_path('logs/') is not
-    # collected. STATUS_LOG_* below tunes sampling/retention.
-    LOG_CHANNEL              = "status_worker"
-    LOG_DEPRECATIONS_CHANNEL = null
-    LOG_LEVEL                = "error"
-
-    DB_CONNECTION = "pgsql"
-    DB_HOST       = module.postgres_database.primary_endpoint
-    DB_PORT       = 6432
-    DB_DATABASE   = var.db_database
-    DB_USERNAME   = var.db_username
-    DB_PASSWORD   = var.db_password
-
-    TENANT_DB_SYNC_URL          = ""
-    TENANT_DB_API_URL           = "https://api.turso.tech"
-    TENANT_TURSO_ORG_SLUG       = var.turso_org_slug
-    TENANT_TURSO_DEFAULT_REGION = "aws-ap-northeast-1"
-    TENANT_DB_AUTH_TOKEN        = var.tenant_db_auth_token
-
-    SESSION_DRIVER   = "redis"
-    SESSION_LIFETIME = 10080
-    SESSION_ENCRYPT  = false
-    SESSION_PATH     = "/"
-    SESSION_DOMAIN   = ".paymentform.io"
-
-    BROADCAST_CONNECTION = "reverb"
-    FILESYSTEM_DISK      = "local"
-    QUEUE_CONNECTION     = "sqs"
-    CACHE_STORE          = "redis"
-
-    # SQS via EC2 instance role — SQS_KEY/SQS_SECRET intentionally unset.
-    # AppServiceProvider::boot() pins `queue.connections.sqs.credentials` to
-    # an explicit InstanceProfileProvider in that case so the SqsClient skips
-    # the AWS SDK's default chain (which would otherwise read
-    # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env first — those hold
-    # Cloudflare R2 credentials and SQS would 403). The IAM policy attached
-    # to the backend instance role grants Send/Receive/Delete on these
-    # queues; see aws_iam_policy.backend_sqs_access below.
-    SQS_PREFIX = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
-    SQS_QUEUE  = "default"
-    SQS_SUFFIX = module.paymentform_sqs.name_suffix
-
-    REDIS_CLIENT   = "phpredis"
-    REDIS_HOST     = module.paymentform_cache.primary_endpoint
-    REDIS_PORT     = "6379"
-    REDIS_PASSWORD = var.redis_password
-
-    # Backend now broadcasts to the in-host Sockudo sidecar (127.0.0.1:6001)
-    # over loopback. Reverb supervisord entry is being retired in a separate
-    # cutover commit; keeping REVERB_* env names because the Laravel reverb
-    # broadcaster reads them as its Pusher-protocol connection config.
-    REVERB_APP_ID          = var.reverb_app_id
-    REVERB_APP_KEY         = var.reverb_app_key
-    REVERB_APP_SECRET      = var.reverb_app_secret
-    REVERB_HOST            = "localhost"
-    REVERB_PORT            = "6001"
-    REVERB_SCHEME          = "http"
-    REVERB_SCALING_ENABLED = "false"
-    # activity_timeout 30s (default) is too aggressive — connections silently drop after the
-    # client's pong cycle exceeds 30s under load. 120s gives breathing room without leaking
-    # stale connections.
-    REVERB_APP_PING_INTERVAL    = "60"
-    REVERB_APP_ACTIVITY_TIMEOUT = "120"
-
-    MAIL_MAILER       = "smtp"
-    MAIL_HOST         = var.mail_host
-    MAIL_USERNAME     = var.mail_username
-    MAIL_PASSWORD     = var.mail_password
-    MAIL_PORT         = "587"
-    MAIL_FROM_ADDRESS = "hello@paymentform.io"
-    MAIL_FROM_NAME    = "Payment Form"
-
-    AWS_ACCESS_KEY_ID           = var.upload_storage_access_key_id
-    AWS_SECRET_ACCESS_KEY       = var.upload_storage_secret_access_key
-    AWS_DEFAULT_REGION          = local.region
-    AWS_BUCKET                  = "paymentform-uploads-us"
-    AWS_BUCKET_EU               = "paymentform-uploads-eu"
-    AWS_BUCKET_AP               = "paymentform-uploads-ap"
-    AWS_USE_PATH_STYLE_ENDPOINT = "true"
-    AWS_ENDPOINT                = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
-    AWS_ENDPOINT_EU             = "https://${var.cloudflare_account_id}.eu.r2.cloudflarestorage.com"
-    AWS_CLOUDFRONT_URL          = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
-    AWS_CDN_URL                 = "https://cdn-us.paymentform.io"
-    AWS_CDN_URL_EU              = "https://cdn-eu.paymentform.io"
-    AWS_CDN_URL_AP              = "https://cdn-ap.paymentform.io"
-    AWS_ACCESS_KEY_ID_EU        = var.upload_storage_access_key_id_eu
-    AWS_SECRET_ACCESS_KEY_EU    = var.upload_storage_secret_access_key_eu
-    AWS_ACCESS_KEY_ID_AP        = var.upload_storage_access_key_id_ap
-    AWS_SECRET_ACCESS_KEY_AP    = var.upload_storage_secret_access_key_ap
-
-    CORS_ALLOWED_ORIGINS = "https://app.paymentform.io"
-    CORS_ALLOWED_METHODS = "POST,GET,OPTIONS,PUT,DELETE,PATCH"
-    CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token, X-XSRF-TOKEN,Accept,Origin, X-Tenant,X-Embed"
-    CORS_EXPOSED_HEADERS = "Content-Disposition"
-
-    # Sanctum matches this via Str::is — patterns are globs, not cookie-domain
-    # syntax. Leading dot here matches NOTHING (e.g. ".paymentform.io/*" does
-    # not match "app.paymentform.io/"). Must be an explicit host list. The
-    # leading-dot cookie-scope semantics belong on SESSION_DOMAIN only.
-    SANCTUM_STATEFUL_DOMAINS = "paymentform.io,app.paymentform.io,api.paymentform.io"
-
-    GOOGLE_CLIENT_ID     = var.google_client_id
-    GOOGLE_CLIENT_SECRET = var.google_client_secret
-    GOOGLE_REDIRECT_URI  = "https://api.paymentform.io/auth/google/callback"
-
-    STRIPE_PUBLIC                 = var.stripe_public_key
-    STRIPE_SECRET                 = var.stripe_secret
-    STRIPE_CLIENT_ID              = var.stripe_client_id
-    STRIPE_REDIRECT_URI           = "https://api.paymentform.io/stripe/callback"
-    STRIPE_CONNECT_WEBHOOK_SECRET = var.stripe_connect_webhook_secret
-
-    KV_STORE_API_URL      = module.paymentform_kv_store.kv_store_endpoint
-    KV_STORE_API_TOKEN    = var.kv_store_api_token
-    KV_STORE_NAMESPACE_ID = module.paymentform_kv_store.namespace_id
-
-    OTEL_SDK_DISABLED           = "true"
-    OTEL_SERVICE_NAME           = "PaymentForm"
-    OTEL_TRACES_EXPORTER        = "otlp"
-    OTEL_METRICS_EXPORTER       = "otlp"
-    OTEL_LOGS_EXPORTER          = "otlp"
-    OTEL_EXPORTER_OTLP_ENDPOINT = "http://otel-collector:4318"
-    OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
-
-    ALERT_EMAIL_ENABLED     = false
-    ALERT_SLACK_ENABLED     = false
-    ALERT_SLACK_CHANNEL     = "#alerts"
-    ALERT_WEBHOOK_ENABLED   = false
-    ALERT_SLACK_WEBHOOK_URL = ""
-    ALERT_WEBHOOK_URL       = ""
-    ALERT_WEBHOOK_SECRET    = ""
-    STATUS_LOG_INGEST_URL   = "https://status.paymentform.io/api/logs/batch"
-    STATUS_LOG_INGEST_TOKEN = var.status_log_ingest_token
-    }, module.postgres_database.replica_endpoint != null ? {
-    DB_HOST_WRITE = module.postgres_database.primary_endpoint
-    DB_HOST_READ  = module.postgres_database.replica_endpoint
-  } : {})
+  container_env_vars = local.backend_env
 
   caddy_env_vars = {
     APP_DOMAIN                       = "api.paymentform.io"
@@ -829,28 +852,16 @@ module "hetzner_admin_hel1" {
   ghcr_token           = var.ghcr_token
   network_id           = tostring(module.hetzner_network_eu.network_id)
 
-  admin_image     = var.admin_container_image
-  backend_image   = var.backend_container_image
-  traefik_host    = "paymentform.io"
+  admin_image   = var.admin_container_image
+  backend_image = var.backend_container_image
+  traefik_host  = "paymentform.io"
 
-  # Backend primary DB reached from Hetzner via pgbouncer over the public
-  # AWS endpoint. SG ingress rule (pgbouncer_ingress_from_admin) opens 6432
-  # for the admin host's IPv4 only. Mirrors the BACKEND_DB_* envs already
-  # passed into the admin app container.
-  backend_db_connection = "pgsql"
-  backend_db_host       = module.postgres_database.primary_public_ip
-  backend_db_port       = "6432"
-  backend_db_database   = var.db_database
-  backend_db_username   = "paymentform_admin"
-  backend_db_password   = var.admin_db_password
+  # Full backend Laravel env (canonical local.backend_env + Hetzner-
+  # specific overrides). Rendered by the admin module into
+  # /opt/app/backend-queue.env; admin compose's backend-queue service
+  # consumes that as env_file.
+  backend_queue_container_env_vars = local.hz_backend_queue_env
 
-  # Hetzner-side SQS credentials. The EC2 backend uses the instance profile
-  # via InstanceProfileProvider; Hetzner has no IMDS so it uses the
-  # dedicated hz_worker IAM user.
-  sqs_key    = aws_iam_access_key.hz_worker.id
-  sqs_secret = aws_iam_access_key.hz_worker.secret
-  sqs_prefix = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
-  sqs_region = local.region
   acme_email      = var.acme_email
   valkey_password = var.valkey_password
 
@@ -925,10 +936,10 @@ module "hetzner_admin_hel1" {
     CORS_ALLOWED_HEADERS = "Content-Type,X-Requested-With,Authorization,X-CSRF-Token,X-XSRF-TOKEN,Accept,Origin"
 
     # Admin app dispatches to local Valkey (low-latency, single-host). The
-    # co-located worker container OVERRIDES this to "sqs" via compose
-    # `environment:` so it consumes the same prod SQS queues as the EC2
-    # workers. Both reads of /opt/app/.env land here first; compose
-    # service-level env wins per the Docker precedence rules.
+    # co-located backend-queue overflow container consumes prod SQS — its
+    # QUEUE_CONNECTION=sqs override lives in local.hz_backend_queue_env
+    # (rendered to /opt/app/backend-queue.env) so admin's own env above is
+    # independent.
     QUEUE_CONNECTION = "redis"
     CACHE_STORE      = "redis"
 
@@ -943,7 +954,7 @@ module "hetzner_admin_hel1" {
     # Tell Laravel's SQS driver where to publish; suffix matches the
     # name_suffix set in module.paymentform_sqs so per-environment queues
     # never collide.
-    SQS_PREFIX = "https://sqs.${local.region}.amazonaws.com/${data.aws_caller_identity.current.account_id}"
+    SQS_PREFIX = local.sqs_prefix
     SQS_QUEUE  = "default"
     SQS_SUFFIX = module.paymentform_sqs.name_suffix
   }
