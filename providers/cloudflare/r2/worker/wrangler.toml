@@ -13,10 +13,28 @@ account_id = ""
 binding = "R2_BUCKET"
 bucket_name = "paymentform-uploads-us"
 
+# NOTE: TENANT_KV binding intentionally omitted here. Terraform provisions it
+# in prod; for `wrangler dev`, add a `[[kv_namespaces]]` block locally with
+# your dev namespace ID — do NOT commit that ID. With no binding the worker
+# falls through `getTenantTier` to `{tier:'free', exp:0}` and serves originals
+# (transforms disabled), which is the safe local-dev default.
+
+# Per (IP, tenant) rate limit guarding image transform billing.
+# Use a high-numbered local-dev ID to avoid colliding with prod region
+# allocations (1001..) in case `wrangler dev` ever talks to the live account.
+[[unsafe.bindings]]
+name = "ABUSE_LIMITER"
+type = "ratelimit"
+namespace_id = "9000"
+simple = { limit = 20, period = 60 }
+
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
 CORS_ORIGINS = "*"
+SELF_HOST = "localhost:8787"
+# Local-dev convenience token; prod uses random_id from Terraform.
+SELF_FETCH_TOKEN = "local-dev-do-not-use-in-prod"
 
 # Development configuration
 [dev]
@@ -26,9 +44,9 @@ local_protocol = "http"
 # Production environment
 [env.production]
 name = "paymentform-cdn-worker-prod"
-vars = { ENVIRONMENT = "production", CORS_ORIGINS = "*" }
+vars = { ENVIRONMENT = "production", CORS_ORIGINS = "*", SELF_HOST = "cdn.paymentform.io" }
 
 # Sandbox environment
 [env.sandbox]
 name = "paymentform-cdn-worker-sandbox"
-vars = { ENVIRONMENT = "sandbox", CORS_ORIGINS = "*" }
+vars = { ENVIRONMENT = "sandbox", CORS_ORIGINS = "*", SELF_HOST = "cdn-sandbox.paymentform.io" }

@@ -29,7 +29,7 @@ variable "worker_enabled" {
 
 variable "regional_buckets" {
   description = "Map of region to bucket names for binding to workers"
-  type        = map(object({
+  type = map(object({
     bucket_name  = string
     jurisdiction = optional(string, "default")
   }))
@@ -54,4 +54,15 @@ variable "regional_domains" {
   default     = {}
 }
 
+variable "tenant_kv_namespace_id" {
+  description = "Workers KV namespace ID holding tenant:{uuid} -> {tier, exp} records. Required for tier gating; leave empty to default all tenants to 'free' (no transforms)."
+  type        = string
+  default     = ""
+}
+
+variable "transform_rate_limit_per_minute" {
+  description = "Requests per minute per (client IP, tenant) before 429. Bounds runaway transform billing from a single abuser. Default 20 = 1 attacker capped at ~$0.60/hr."
+  type        = number
+  default     = 20
+}
 
