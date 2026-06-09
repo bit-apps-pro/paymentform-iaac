@@ -124,7 +124,7 @@ locals {
     REVERB_APP_ID               = var.reverb_app_id
     REVERB_APP_KEY              = var.reverb_app_key
     REVERB_APP_SECRET           = var.reverb_app_secret
-    REVERB_HOST                 = "localhost"
+    REVERB_HOST                 = "127.0.0.1"
     REVERB_PORT                 = "6001"
     REVERB_SCHEME               = "http"
     REVERB_SCALING_ENABLED      = "false"
