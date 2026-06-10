@@ -22,22 +22,6 @@ else
 fi
 }
 
-ensure_docker_compose() {
-  # docker-compose-plugin ships with current Docker on Amazon Linux 2023.
-  # Guard against older AMIs by attempting an install if `docker compose` is
-  # missing. Never fail userdata over this — fall through and let the compose
-  # command surface a clear error.
-  if docker compose version >/dev/null 2>&1; then
-    return 0
-  fi
-  log "docker compose plugin missing; attempting install"
-  if command -v dnf >/dev/null 2>&1; then
-    dnf install -y docker-compose-plugin || true
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y docker-compose-plugin || true
-  fi
-}
-
 log "Starting container deployment"
 
 ENV_PATH="/etc/app.env"
@@ -113,23 +97,8 @@ else
   rm -f "$SOCKUDO_CONFIG_PATH"
 fi
 
-# -----------------------------------------------------------------------------
-# Compose file. Terraform-side $${...} interpolation already happened; the
-# quoted heredoc below disables shell-level expansion so YAML $${...} (none
-# currently) and $$ sequences pass through untouched.
-# -----------------------------------------------------------------------------
-COMPOSE_DIR="/opt/paymentform"
-COMPOSE_PATH="$COMPOSE_DIR/compose.yml"
-mkdir -p "$COMPOSE_DIR"
-log "Writing compose file to $COMPOSE_PATH"
-cat > "$COMPOSE_PATH" <<'COMPOSE_EOF'
-${compose_yml_content}
-COMPOSE_EOF
-
 # Legacy deploy script kept available for ad-hoc debugging but no longer
-# invoked from userdata — the compose flow below replaces it. ${deploy_script_content}
-# is intentionally read into a sentinel file so future change-detection still
-# works for callers that supply it.
+# invoked from userdata — the docker run flow below replaces it.
 if [ -n "${deploy_script_content}" ]; then
   log "Writing legacy deploy script for reference (unused at boot)"
   cat > /usr/local/bin/deploy-ec2.sh <<'DEPLOYEOF'
@@ -138,19 +107,56 @@ DEPLOYEOF
   chmod +x /usr/local/bin/deploy-ec2.sh
 fi
 
-ensure_docker_compose
+CONTAINER_NAME="paymentform-backend"
+BACKEND_IMAGE="${IMAGE}"
 
-log "Pulling container images via docker compose"
-cd "$COMPOSE_DIR"
-docker compose pull
+log "Pulling $BACKEND_IMAGE"
+docker pull "$BACKEND_IMAGE"
 
-log "Starting containers (waiting for healthchecks)"
-# --wait blocks until every service with a healthcheck reports healthy. If
-# backend never comes up, userdata fails loudly here instead of leaving a
-# silently-broken instance attached to the ALB.
-docker compose up -d --remove-orphans --wait
+# Idempotent boot: remove any prior container (e.g. AMI replacement / restart)
+# before starting a fresh one. `|| true` keeps the cold-boot path quiet.
+docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-log "Containers started successfully"
+SOCKUDO_VOLUME_FLAG=""
+if [ "${sockudo_enabled}" = "true" ]; then
+  SOCKUDO_VOLUME_FLAG="-v /etc/sockudo/config.json:/etc/sockudo/config.json:ro"
+fi
+
+log "Starting $CONTAINER_NAME"
+docker run -d \
+  --name "$CONTAINER_NAME" \
+  --network host \
+  --restart unless-stopped \
+  --env-file /etc/app.env \
+  -e CADDY_ENV_FILE=/etc/caddy.env \
+  $SOCKUDO_VOLUME_FLAG \
+  --health-cmd "curl -sf http://localhost:80/health" \
+  --health-interval 30s \
+  --health-timeout 10s \
+  --health-start-period 60s \
+  --health-retries 3 \
+  --ulimit nofile=65536:65536 \
+  "$BACKEND_IMAGE"
+
+# Poll the container's healthcheck until it reports `healthy` so userdata
+# fails loudly when the backend never finishes booting (mirrors the prior
+# `docker compose up --wait` semantics). 60 × 5 s = 5 min ceiling matches
+# start_period + healthcheck retries × interval budget.
+log "Waiting for $CONTAINER_NAME healthcheck"
+for i in $(seq 1 60); do
+  status=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo missing)
+  if [ "$status" = "healthy" ]; then
+    log "$CONTAINER_NAME is healthy"
+    break
+  fi
+  if [ "$i" -eq 60 ]; then
+    log "ERROR: $CONTAINER_NAME never reached healthy (last status: $status)"
+    docker logs --tail 200 "$CONTAINER_NAME" || true
+    exit 1
+  fi
+  sleep 5
+done
 
 %{ if tunnel_token != "" ~}
 log "Starting cloudflared tunnel connector"
