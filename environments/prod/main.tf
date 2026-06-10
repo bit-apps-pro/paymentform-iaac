@@ -564,9 +564,6 @@ module "paymentform_backend" {
     CADDY_SERVER_ADMIN_PORT          = "2019"
     CADDY_SERVER_ADMIN_HOST          = "localhost"
     CADDY_SERVER_LOGGER              = "json"
-    REVERB_APP_ID                    = var.reverb_app_id
-    REVERB_APP_KEY                   = var.reverb_app_key
-    REVERB_APP_SECRET                = var.reverb_app_secret
   }
 }
 
