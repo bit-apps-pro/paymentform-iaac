@@ -81,60 +81,16 @@ authenticate_ghcr
 # the prior /etc/sockudo/config.json write was the only reason this module
 # needed templated JSON on disk.
 
-# Legacy deploy script kept available for ad-hoc debugging but no longer
-# invoked from userdata — the docker run flow below replaces it.
-if [ -n "${deploy_script_content}" ]; then
-  log "Writing legacy deploy script for reference (unused at boot)"
-  cat > /usr/local/bin/deploy-ec2.sh <<'DEPLOYEOF'
+log "Writing deploy script"
+cat > /usr/local/bin/deploy-ec2.sh <<'DEPLOYEOF'
 ${deploy_script_content}
 DEPLOYEOF
-  chmod +x /usr/local/bin/deploy-ec2.sh
-fi
+chmod +x /usr/local/bin/deploy-ec2.sh
 
-CONTAINER_NAME="paymentform-backend"
-BACKEND_IMAGE="${IMAGE}"
+log "Executing deploy script"
+/usr/local/bin/deploy-ec2.sh
 
-log "Pulling $BACKEND_IMAGE"
-docker pull "$BACKEND_IMAGE"
-
-# Idempotent boot: remove any prior container (e.g. AMI replacement / restart)
-# before starting a fresh one. `|| true` keeps the cold-boot path quiet.
-docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
-
-log "Starting $CONTAINER_NAME"
-docker run -d \
-  --name "$CONTAINER_NAME" \
-  --network host \
-  --restart unless-stopped \
-  --env-file /etc/app.env \
-  -e CADDY_ENV_FILE=/etc/caddy.env \
-  --health-cmd "curl -sf http://localhost:80/health" \
-  --health-interval 30s \
-  --health-timeout 10s \
-  --health-start-period 60s \
-  --health-retries 3 \
-  --ulimit nofile=65536:65536 \
-  "$BACKEND_IMAGE"
-
-# Poll the container's healthcheck until it reports `healthy` so userdata
-# fails loudly when the backend never finishes booting (mirrors the prior
-# `docker compose up --wait` semantics). 60 × 5 s = 5 min ceiling matches
-# start_period + healthcheck retries × interval budget.
-log "Waiting for $CONTAINER_NAME healthcheck"
-for i in $(seq 1 60); do
-  status=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo missing)
-  if [ "$status" = "healthy" ]; then
-    log "$CONTAINER_NAME is healthy"
-    break
-  fi
-  if [ "$i" -eq 60 ]; then
-    log "ERROR: $CONTAINER_NAME never reached healthy (last status: $status)"
-    docker logs --tail 200 "$CONTAINER_NAME" || true
-    exit 1
-  fi
-  sleep 5
-done
+log "Container started successfully"
 
 %{ if tunnel_token != "" ~}
 log "Starting cloudflared tunnel connector"
