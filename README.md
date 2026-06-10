@@ -50,7 +50,7 @@ iaac/
 │   │   ├── cloudtrail/         # Audit trail
 │   │   └── route53-failover/   # DNS-level failover scaffold
 │   ├── cloudflare/
-│   │   ├── containers/         # Client (Next.js SSR) + renderer containers
+│   │   ├── containers/         # Client (React SPA) + renderer containers
 │   │   ├── dns/                # Records, WAF, rate limits, cache rules
 │   │   ├── loadbalancer/       # CF LB for origin pools
 │   │   ├── r2/
@@ -89,7 +89,7 @@ flowchart LR
         DNS[DNS + WAF + Rate Limit]
         Status["status.* (Worker + D1)"]
         CDN["cdn-{us,eu,ap}.* (Workers)"]
-        Client["app.* — Container (Next.js SSR)"]
+        Client["app.* — Container (React SPA)"]
         Renderer["*.renderer.* — Container (Caddy + Next.js)"]
         Tunnel["cloudflared tunnel (db-tunnel.*)"]
         KV[(KV — tenants)]
@@ -221,7 +221,7 @@ flowchart LR
 |---|---|---|---|
 | Backend API | `aws/compute-alb` + `aws/alb` | `api.paymentform.io` | Laravel/FrankenPHP, ASG, ACM via CF DNS validation, CF-only ingress |
 | Renderer | `aws/compute-nlb` + `aws/nlb` | `*.renderer.paymentform.io` | Caddy + Next.js, NLB, wildcard TLS via R2-stored certs |
-| Client (Dashboard) | `cloudflare/containers` | `app.paymentform.io` | Cloudflare Container, Next.js SSR |
+| Client (Dashboard) | `cloudflare/containers` | `app.paymentform.io` | Cloudflare Container, React SPA (Vite + TanStack Router) |
 | Admin App | `hetzner/admin-server` | `admin.paymentform.io` | hel1, Traefik + admin + valkey + local PG (barman → R2) |
 | Postgres primary | `aws/database` | private | pgbouncer in front, EBS data volume, pgbackrest → R2 |
 | Postgres replicas | `hetzner/database` × 2 | private | hel1 + sin1, WAL via CF tunnel |

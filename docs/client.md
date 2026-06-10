@@ -2,7 +2,7 @@
 
 ## Overview
 
-The client dashboard is a Next.js SSR application deployed as a Cloudflare Container via `module.paymentform_client` (source: `providers/cloudflare/containers/`).
+The client dashboard is a React SPA (Vite + TanStack Router) deployed as a Cloudflare Container via `module.paymentform_client` (source: `providers/cloudflare/containers/`).
 
 ## Configuration
 
