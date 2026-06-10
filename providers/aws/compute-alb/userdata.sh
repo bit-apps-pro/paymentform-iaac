@@ -76,26 +76,10 @@ echo "AUTO_SSL=${auto_ssl}" >> "$CADDY_ENV_PATH"
 
 authenticate_ghcr
 
-# -----------------------------------------------------------------------------
-# Sockudo config — only written when the sidecar is enabled. Terraform passes
-# an empty string when disabled so this block no-ops cleanly on renderer
-# instances and on backend instances that opt out.
-# -----------------------------------------------------------------------------
-SOCKUDO_CONFIG_DIR="/etc/sockudo"
-SOCKUDO_CONFIG_PATH="$SOCKUDO_CONFIG_DIR/config.json"
-mkdir -p "$SOCKUDO_CONFIG_DIR"
-SOCKUDO_CONFIG_CONTENT=$(cat <<'SOCKUDO_EOF'
-${sockudo_config_content}
-SOCKUDO_EOF
-)
-if [ -n "$SOCKUDO_CONFIG_CONTENT" ]; then
-  log "Writing sockudo config to $SOCKUDO_CONFIG_PATH"
-  printf '%s\n' "$SOCKUDO_CONFIG_CONTENT" > "$SOCKUDO_CONFIG_PATH"
-  chmod 0644 "$SOCKUDO_CONFIG_PATH"
-else
-  log "Sockudo disabled — skipping config write"
-  rm -f "$SOCKUDO_CONFIG_PATH"
-fi
+# Sockudo config is rendered inside the container by start.sh, reading
+# REVERB_APP_{ID,KEY,SECRET} from the env_file. No host-side bind-mount —
+# the prior /etc/sockudo/config.json write was the only reason this module
+# needed templated JSON on disk.
 
 # Legacy deploy script kept available for ad-hoc debugging but no longer
 # invoked from userdata — the docker run flow below replaces it.
@@ -118,11 +102,6 @@ docker pull "$BACKEND_IMAGE"
 docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-SOCKUDO_VOLUME_FLAG=""
-if [ "${sockudo_enabled}" = "true" ]; then
-  SOCKUDO_VOLUME_FLAG="-v /etc/sockudo/config.json:/etc/sockudo/config.json:ro"
-fi
-
 log "Starting $CONTAINER_NAME"
 docker run -d \
   --name "$CONTAINER_NAME" \
@@ -130,7 +109,6 @@ docker run -d \
   --restart unless-stopped \
   --env-file /etc/app.env \
   -e CADDY_ENV_FILE=/etc/caddy.env \
-  $SOCKUDO_VOLUME_FLAG \
   --health-cmd "curl -sf http://localhost:80/health" \
   --health-interval 30s \
   --health-timeout 10s \

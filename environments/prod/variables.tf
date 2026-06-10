@@ -407,3 +407,9 @@ variable "renderer_static_cors_origins" {
   type        = list(string)
   default     = ["*"]
 }
+
+variable "admin_backend_api_token" {
+  description = "API token for the admin app to authenticate with the backend API. Should be a long random string."
+  type        = string
+  sensitive   = true
+} 

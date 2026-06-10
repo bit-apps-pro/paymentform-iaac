@@ -195,6 +195,7 @@ locals {
     ALERT_WEBHOOK_SECRET    = ""
     STATUS_LOG_INGEST_URL   = "https://status.paymentform.io/api/logs/batch"
     STATUS_LOG_INGEST_TOKEN = var.status_log_ingest_token
+    ADMIN_BACKEND_API_TOKEN = var.admin_backend_api_token
     }, module.postgres_database.replica_endpoint != null ? {
     DB_HOST_WRITE = module.postgres_database.primary_endpoint
     DB_HOST_READ  = module.postgres_database.replica_endpoint
@@ -539,18 +540,13 @@ module "paymentform_backend" {
   ]
   deploy_script_content = file("${path.module}/../../../backend/.github/scripts/deploy-ec2.sh")
 
-  # Sockudo sidecar. Sockudo binds 127.0.0.1:6001 on host network so
-  # the backend Caddy `/ws/*` handler reaches it via loopback. Cross-instance
-  # fanout uses the same Valkey already wired as REDIS_HOST for the app.
-  sockudo_enabled         = true
-  valkey_host             = module.paymentform_cache.primary_endpoint
-  valkey_password         = var.redis_password
-  reverb_app_id           = var.reverb_app_id
-  reverb_app_key          = var.reverb_app_key
-  reverb_app_secret       = var.reverb_app_secret
-  sockudo_allowed_origins = ["https://app.paymentform.io"]
+  # Sockudo runs in-container alongside FrankenPHP. Its config gets rendered
+  # at boot by start.sh from REVERB_APP_{ID,KEY,SECRET} below — no module-
+  # level sockudo plumbing needed.
 
-  container_env_vars = local.backend_env
+  container_env_vars = merge(local.backend_env, {
+    ADMIN_BACKEND_API_ALLOWED_IPS = module.hetzner_admin_hel1.ipv4_address
+  })
 
   caddy_env_vars = {
     APP_DOMAIN                       = "api.paymentform.io"
@@ -568,6 +564,9 @@ module "paymentform_backend" {
     CADDY_SERVER_ADMIN_PORT          = "2019"
     CADDY_SERVER_ADMIN_HOST          = "localhost"
     CADDY_SERVER_LOGGER              = "json"
+    REVERB_APP_ID                    = var.reverb_app_id
+    REVERB_APP_KEY                   = var.reverb_app_key
+    REVERB_APP_SECRET                = var.reverb_app_secret
   }
 }
 
@@ -954,9 +953,10 @@ module "hetzner_admin_hel1" {
     # Tell Laravel's SQS driver where to publish; suffix matches the
     # name_suffix set in module.paymentform_sqs so per-environment queues
     # never collide.
-    SQS_PREFIX = local.sqs_prefix
-    SQS_QUEUE  = "default"
-    SQS_SUFFIX = module.paymentform_sqs.name_suffix
+    SQS_PREFIX              = local.sqs_prefix
+    SQS_QUEUE               = "default"
+    SQS_SUFFIX              = module.paymentform_sqs.name_suffix
+    ADMIN_BACKEND_API_TOKEN = var.admin_backend_api_token
   }
 
   standard_tags = local.standard_tags

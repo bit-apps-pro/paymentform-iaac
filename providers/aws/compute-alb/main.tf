@@ -15,36 +15,17 @@ locals {
   # Use instance_prefix when set (multi-instance deployments), else fall back to environment
   prefix = var.instance_prefix != "" ? var.instance_prefix : var.environment
 
-  # Sockudo only attaches when the caller is a backend instance AND explicitly
-  # opts in. Renderer instances keep the default (false). userdata.sh reads
-  # the boolean to decide whether to bind-mount /etc/sockudo/config.json.
-  sockudo_enabled = var.service_type == "backend" && var.sockudo_enabled
-
-  # Sockudo config is only rendered (and written by userdata) when the sidecar
-  # is enabled. Empty string sentinel lets the userdata heredoc no-op.
-  sockudo_config_content = local.sockudo_enabled ? templatefile("${path.module}/templates/sockudo.config.json.tftpl", {
-    valkey_host     = var.valkey_host
-    valkey_port     = var.valkey_port
-    valkey_password = var.valkey_password
-    app_id          = var.reverb_app_id
-    app_key         = var.reverb_app_key
-    app_secret      = var.reverb_app_secret
-    allowed_origins = var.sockudo_allowed_origins
-  }) : ""
-
   rendered_userdata = templatefile("${path.module}/userdata.sh", {
-    environment            = var.environment
-    ghcr_username          = var.ghcr_username
-    region                 = var.region
-    service_type           = var.service_type
-    container_env_vars     = join("\n", [for k, v in var.container_env_vars : "${k}=${v}" if v != null])
-    caddy_env_vars         = join("\n", [for k, v in var.caddy_env_vars : "${k}=${v}" if v != null])
-    IMAGE                  = var.container_image
-    auto_ssl               = var.auto_ssl
-    tunnel_token           = var.tunnel_token
-    deploy_script_content  = var.deploy_script_content
-    sockudo_enabled        = tostring(local.sockudo_enabled)
-    sockudo_config_content = local.sockudo_config_content
+    environment           = var.environment
+    ghcr_username         = var.ghcr_username
+    region                = var.region
+    service_type          = var.service_type
+    container_env_vars    = join("\n", [for k, v in var.container_env_vars : "${k}=${v}" if v != null])
+    caddy_env_vars        = join("\n", [for k, v in var.caddy_env_vars : "${k}=${v}" if v != null])
+    IMAGE                 = var.container_image
+    auto_ssl              = var.auto_ssl
+    tunnel_token          = var.tunnel_token
+    deploy_script_content = var.deploy_script_content
   })
 }
 
